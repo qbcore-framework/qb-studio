@@ -59,6 +59,7 @@ import {
 } from "./managedRuntime";
 import { OperationLock } from "./operationLock";
 import { LuaLanguageServerProcess, type JsonRpcMessage } from "./luaLanguageServer";
+import { resolveLuaDefinitionPackRoots } from "./luaDefinitionPacks";
 import {
   checkArtifactUpdate,
   findRunningServerPids,
@@ -758,6 +759,7 @@ function registerIpcHandlers() {
         );
       }
       const switchingAgent = agentRuntimeSignature(previous) !== agentRuntimeSignature(normalizedRequested);
+      const switchingLuaTarget = previous.activeCfxTarget !== normalizedRequested.activeCfxTarget;
       if (switchingAgent && agent.isRunning()) {
         throw new Error("Stop the current agent response before changing its connection or model.");
       }
@@ -768,7 +770,12 @@ function registerIpcHandlers() {
         agent.resetConversation();
         await mcpDisconnect();
         stopManagedRuntime();
-        luaLanguageServer.stop();
+        await luaLanguageServer.stop();
+      } else if (switchingLuaTarget) {
+        // The renderer will initialize a fresh service after it receives the
+        // saved target. Stop the old process first so it cannot serve stale
+        // FiveM/RedM completions during the transition.
+        await luaLanguageServer.stop();
       } else if (switchingAgent) {
         agent.resetConversation();
       }
@@ -1374,8 +1381,21 @@ function registerIpcHandlers() {
     if (!fs.existsSync(executable)) {
       return { ok: false as const, mode, error: "The bundled Lua language server is missing. Reinstall QB Studio." };
     }
-    if (!fs.existsSync(libraryRoot)) {
-      return { ok: false as const, mode, error: "The bundled QBCore/Cfx definitions are missing. Reinstall QB Studio." };
+    let libraryRoots: string[];
+    try {
+      libraryRoots = resolveLuaDefinitionPackRoots(libraryRoot, config.activeCfxTarget);
+    } catch (error) {
+      return { ok: false as const, mode, error: (error as Error).message };
+    }
+    const pluginPath = path.join(libraryRoot, "plugin.lua");
+    let pluginReady = false;
+    try {
+      pluginReady = fs.statSync(pluginPath).isFile();
+    } catch {
+      pluginReady = false;
+    }
+    if (!pluginReady) {
+      return { ok: false as const, mode, error: "The bundled Lua runtime plugin is missing. Reinstall QB Studio." };
     }
     const logPath = path.join(app.getPath("logs"), "lua-language-server");
     fs.mkdirSync(logPath, { recursive: true });
@@ -1390,7 +1410,7 @@ function registerIpcHandlers() {
         if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send("lua:status", status);
       },
     );
-    return { ok: true as const, mode, workspaceRoot, libraryRoot, version: "3.19.1" };
+    return { ok: true as const, mode, workspaceRoot, libraryRoots, pluginPath, target: config.activeCfxTarget, version: "3.19.1" };
   });
   ipcMain.handle("lua:stop", () => luaLanguageServer.stop());
   ipcMain.on("lua:send", (event, value: unknown) => {

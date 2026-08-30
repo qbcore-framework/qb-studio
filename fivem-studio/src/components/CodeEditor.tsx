@@ -5,7 +5,7 @@ import * as monaco from "monaco-editor/editor";
 import { ensureUserTheme } from "../monacoSetup";
 import { notifyLuaDocumentSaved, useLuaLanguageService, type LuaServiceStatus } from "../luaLanguageService";
 import type { OpenFile } from "../App";
-import type { EditorPreferences, EditorProblem, ResolvedTheme } from "../global";
+import type { CfxTarget, EditorPreferences, EditorProblem, ResolvedTheme } from "../global";
 import { t } from "../i18n";
 
 function revealEditorPosition(editor: monaco.editor.IStandaloneCodeEditor, line: number, column: number): void {
@@ -23,6 +23,7 @@ interface CodeEditorProps {
   preferences: EditorPreferences;
   resolvedTheme: ResolvedTheme;
   luaActive: boolean;
+  luaTarget: CfxTarget;
   reveal: { path: string; line: number; column: number; nonce: number } | null;
   onChange: (path: string, content: string) => void;
   onSave: (path: string, content: string, expectedRevision: string) => Promise<void>;
@@ -103,6 +104,7 @@ export default function CodeEditor({
   preferences,
   resolvedTheme,
   luaActive,
+  luaTarget,
   reveal,
   onChange,
   onSave,
@@ -116,7 +118,7 @@ export default function CodeEditor({
   onToggleBookmark,
 }: CodeEditorProps) {
   const monacoInstance = useMonaco();
-  const luaStatus = useLuaLanguageService(luaActive, preferences.luaIntelligence);
+  const luaStatus = useLuaLanguageService(luaActive, preferences.luaIntelligence, luaTarget);
   const fileRef = useRef(file);
   const onSaveRef = useRef(onSave);
   const onChangeRef = useRef(onChange);

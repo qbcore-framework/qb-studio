@@ -1605,6 +1605,7 @@ export default function App() {
               onConsoleRefreshIntervalChange={handleConsoleRefreshIntervalChange}
               resourceLifecycleAvailable={runtimeIdentity?.capabilities.resourceLifecycle ?? null}
               clientLabel={activeTargetLabel}
+              activeCfxTarget={config.activeCfxTarget}
               editorPreferences={config.editor}
               resolvedTheme={resolvedTheme}
               editorProblems={editorProblems}

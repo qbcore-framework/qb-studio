@@ -29,6 +29,7 @@ npm audit signatures
 npm run check:static
 npm run audit:dependencies
 npm run prepare:luals
+npm run verify:lua-definitions
 npm run typecheck
 npm test
 npm run dist
@@ -43,10 +44,10 @@ libraries remain visible; it is intentionally broader than an exact inventory
 of files copied beside the executable.
 
 The packaged-runtime check verifies the renderer manifest, private loopback
-runtime, native window-integration module, QBCore/Cfx Lua definitions, pinned
-Lua language-server executable and license, package metadata, and exclusion of
-application test/source-map/secret files from the unpacked release—not only the
-source tree.
+runtime, native window-integration module, FiveM, RedM, and curated QBCore Lua
+definition packs, pinned Lua language-server executable and license, package
+metadata, and exclusion of application test/source-map/secret files from the
+unpacked release—not only the source tree.
 
 GitHub Actions are pinned to reviewed full commit SHAs. Dependabot may propose
 new action versions, but reviewers must resolve the tag to its reviewed commit
@@ -78,6 +79,44 @@ Updating LuaLS requires reviewing its release notes and license, changing both
 the version and checksum, running the end-to-end CfxLua completion test, and
 rebuilding the installer. This deliberate pin prevents a release build from
 silently acquiring a different native executable.
+
+## Bundled Lua definition packs
+
+QB Studio exposes exactly three definition products beneath
+`fivem-studio/resources/lua-library`: `fivem`, `redm`, and `qbcore`. FiveM
+targets load FiveM plus QBCore; RedM loads only RedM. Shared runtime declarations
+are intentionally duplicated into the two engine packs, so there is no fourth
+platform definition product.
+
+Engine definitions are locked by `scripts/lua-definitions-release.json`. The
+FiveM/RedM game declarations and reviewed LuaLS plugin come from one exact
+`overextended/fivem-lls-addon` commit and archive checksum. Platform signatures
+come from the exact checksum-pinned official JSON snapshot. FiveM generation
+accepts untagged and `gta5` records; RedM accepts explicit `rdr3` records plus
+the reviewed, version-controlled common allowlist. Generated platform files
+contain signature facts and documentation links, not copied upstream prose or
+examples. QBCore remains a separately maintained source file and is carried
+forward without regeneration.
+
+To update the reviewed inputs, change the exact commit/checksums and, when
+needed, the RedM allowlist, then run:
+
+```powershell
+npm run update:lua-definitions
+npm run verify:lua-definitions
+npm run typecheck
+npm test
+npm run dist
+npm run verify:package
+```
+
+The updater downloads into bounded temporary storage, verifies every source
+before extraction, generates into a staging directory, and swaps the bundle
+only after validation. Ordinary development, test, build, and release gates
+run the offline verifier only; they never follow a moving upstream branch or
+silently fetch a different definition snapshot. Reviewers must inspect count,
+signature, target-filter, provenance, license, and completion-test changes
+before accepting a new lock.
 
 ## Resource-impact review
 

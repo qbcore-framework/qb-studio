@@ -2,7 +2,7 @@ import { Fragment, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useS
 import { Group, Panel, Separator } from "react-resizable-panels";
 import type { FileChangeReview, OpenFile } from "../App";
 import { languageForPath } from "../editorLanguage";
-import type { CrashTriageContext, EditorBookmark, EditorPreferences, EditorProblem, ResolvedTheme, ResourceComparison, ResourceContext, ResourceDependencyGraph, WindowCandidate } from "../global";
+import type { CfxTarget, CrashTriageContext, EditorBookmark, EditorPreferences, EditorProblem, ResolvedTheme, ResourceComparison, ResourceContext, ResourceDependencyGraph, WindowCandidate } from "../global";
 import { t } from "../i18n";
 import type { LuaServiceStatus } from "../luaLanguageService";
 import { countNewConsoleLines, filterConsoleOutput, newestErrorBlock, type ConsoleSeverity } from "../consoleText";
@@ -49,6 +49,7 @@ interface CenterPaneProps {
   onConsoleRefreshIntervalChange: (intervalMs: number) => Promise<void>;
   resourceLifecycleAvailable: boolean | null;
   clientLabel: string;
+  activeCfxTarget: CfxTarget;
   editorPreferences: EditorPreferences;
   resolvedTheme: ResolvedTheme;
   editorProblems: Record<string, EditorProblem[]>;
@@ -96,6 +97,7 @@ export default function CenterPane({
   onConsoleRefreshIntervalChange,
   resourceLifecycleAvailable,
   clientLabel,
+  activeCfxTarget,
   editorPreferences,
   resolvedTheme,
   editorProblems,
@@ -184,6 +186,7 @@ export default function CenterPane({
       preferences={editorPreferences}
       resolvedTheme={resolvedTheme}
       luaActive={openFiles.some((openFile) => languageForPath(openFile.path) === "lua")}
+      luaTarget={activeCfxTarget}
       reveal={revealLocation}
       onChange={onChange}
       onSave={onSave}

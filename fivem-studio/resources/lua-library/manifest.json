@@ -1,0 +1,962 @@
+{
+  "schemaVersion": 1,
+  "reviewedAt": "2026-08-30",
+  "productPacks": [
+    "fivem",
+    "redm",
+    "qbcore"
+  ],
+  "sources": {
+    "addon": {
+      "repository": "https://github.com/overextended/fivem-lls-addon",
+      "commit": "569364a2cceefef160c776e350a3b18407d191cf",
+      "archiveUrl": "https://codeload.github.com/overextended/fivem-lls-addon/zip/569364a2cceefef160c776e350a3b18407d191cf",
+      "archiveBytes": 930246,
+      "archiveSha256": "980b90053a4b0b9aa041d3d5a5972720aecce3ca34307570157ab2d305598f9f",
+      "license": "MIT"
+    },
+    "platformNatives": {
+      "source": "https://static.cfx.re/natives/natives_cfx.json",
+      "bytes": 563139,
+      "sha256": "165e33a362d00406abc08e35fe6656b11404c391362a9d286a85644081180451",
+      "etag": "\"42046d75ac74ded5faba889d176ac82a:1784647202.302765\"",
+      "lastModified": "Tue, 21 Jul 2026 15:20:02 GMT",
+      "redmCommonAllowlistSha256": "8a95ba187e9db5fd94c22b460e7813bc643f5f7bd90fe71df310f55091813d16"
+    },
+    "qbcore": {
+      "maintenance": "curated",
+      "path": "qbcore/qbcore.lua"
+    }
+  },
+  "composition": {
+    "fivem": [
+      "addon-runtime",
+      "addon-gtav-natives",
+      "filtered-platform-natives"
+    ],
+    "redm": [
+      "addon-runtime",
+      "addon-rdr3-natives",
+      "filtered-platform-natives"
+    ],
+    "qbcore": [
+      "curated-qbcore"
+    ]
+  },
+  "counts": {
+    "addon": {
+      "runtime": 7,
+      "fivemGame": 44,
+      "redmGame": 86,
+      "plugin": 1,
+      "license": 1
+    },
+    "platform": {
+      "sourceRecords": 973,
+      "fivemFunctions": 942,
+      "redmFunctions": 219
+    }
+  },
+  "files": [
+    {
+      "path": "fivem/natives/game/APP.lua",
+      "bytes": 3864,
+      "sha256": "0e7f803139fa306c1e0b5cbee7cde51d050dcfe67c46a7999be748e8fc09eb30",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "fivem/natives/game/AUDIO.lua",
+      "bytes": 96557,
+      "sha256": "a9addb41577eabe17daf3f4d1a66d37c55255ee78de77eb4759d9a7f76114f66",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "fivem/natives/game/BRAIN.lua",
+      "bytes": 3962,
+      "sha256": "4d5978545c0a27577a6da9ff2633fdcde1b01fd019d456cb9f8826f88131693b",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "fivem/natives/game/CAM.lua",
+      "bytes": 83723,
+      "sha256": "ba3fa29d6becbc486f3017af1f306e1cfbd7ce60af16fdb503a0a21dc3cf8b71",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "fivem/natives/game/CLOCK.lua",
+      "bytes": 4624,
+      "sha256": "08be389d4a897739cc0e7d79899db065e7e2e8808e95c05790de67c6533b8f97",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "fivem/natives/game/CUTSCENE.lua",
+      "bytes": 16086,
+      "sha256": "cc3a94681b3733735bb3136b5561abc5d4a88568907c163941716770981e38f4",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "fivem/natives/game/DATAFILE.lua",
+      "bytes": 17445,
+      "sha256": "be65e8b51d7f021a5b4d24d88f49e912053728a1ae31687983d3a977ee8dc46e",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "fivem/natives/game/DECORATOR.lua",
+      "bytes": 3687,
+      "sha256": "5f4e999f4dffa2cf1d2e4fabb8c06ae854c4c83030e3e39788ba1a56403141cf",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "fivem/natives/game/DLC.lua",
+      "bytes": 3992,
+      "sha256": "31c73ecb07a5b81aaa94f7f6f5b715aa99780295bb0fb64b039b5a4221ece180",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "fivem/natives/game/ENTITY.lua",
+      "bytes": 71148,
+      "sha256": "1c279cf8b116ed8e23500243d408a90ed0e65da9bc80942365499ff5e8084d7a",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "fivem/natives/game/EVENT.lua",
+      "bytes": 3720,
+      "sha256": "0ed870d49f20bb55dd4552fddde1122541524a07fd4a28f32c117227d2a6c751",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "fivem/natives/game/FILES.lua",
+      "bytes": 17757,
+      "sha256": "73922ea25c10ab8f81f29c6df8f707733be26e389d49f09c551c241603cd013f",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "fivem/natives/game/FIRE.lua",
+      "bytes": 8922,
+      "sha256": "9647b21c7936680f8255d2e13c0cfed816425e9d641e06fd751b841ec1c4c45c",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "fivem/natives/game/GRAPHICS.lua",
+      "bytes": 158357,
+      "sha256": "b99570ced3f5e0b2d6b8a09ede306b5293be7c8ee5dfe581cb14d37fd91f8c0a",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "fivem/natives/game/HUD.lua",
+      "bytes": 192930,
+      "sha256": "44ddd82f1660a4eb5bdbbcc5e37a5b9a58662d2dfd4accea32dc84110205209b",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "fivem/natives/game/INTERIOR.lua",
+      "bytes": 14271,
+      "sha256": "1d8ad1f72dd0a3dfe712bae0fd92a93266b13fa5d06d511333974cfbaefb7bcc",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "fivem/natives/game/ITEMSET.lua",
+      "bytes": 2135,
+      "sha256": "8742f8a067dfcdabda43a4df5fff4d471a4b5c9f4e2ba8f6a6d2c5a3179c5a38",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "fivem/natives/game/LOADINGSCREEN.lua",
+      "bytes": 2225,
+      "sha256": "fc8e9c395f2185c18e6aa30f05aeb2ef2ad7bea5169bec1daf8d332417e329e8",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "fivem/natives/game/LOCALIZATION.lua",
+      "bytes": 1149,
+      "sha256": "a149525a8bf26fd78be9fd15ed0704587aaf6d290905877bf06dc87dc902d123",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "fivem/natives/game/MISC.lua",
+      "bytes": 108536,
+      "sha256": "4d61a13aeccd66ea2342c126ff8ce883048ebc41143df1c18ab001649aa4f08f",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "fivem/natives/game/MOBILE.lua",
+      "bytes": 7832,
+      "sha256": "739ae6fccf6c16e695a86427f3b8a5a616dff6fd420854f71d985bfb16c7bb2a",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "fivem/natives/game/MONEY.lua",
+      "bytes": 84689,
+      "sha256": "db163d652503ca5a007cd83c3cf81adb95a3fd58be9233764d81700e9abc7bdf",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "fivem/natives/game/NETSHOPPING.lua",
+      "bytes": 12926,
+      "sha256": "99076553b153e1708b2983726fa0a5abd4184bf077427f36b22899731b592d33",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "fivem/natives/game/NETWORK.lua",
+      "bytes": 237806,
+      "sha256": "3fb4c413a52a4f7ce56826005e4cd4aa970ac69af69855c47b09a28e3ce89a3f",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "fivem/natives/game/OBJECT.lua",
+      "bytes": 57692,
+      "sha256": "1b908311ab17c358bca654466fcfcac6fc9a6fac36f44d2adf7c74084d5159b7",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "fivem/natives/game/PAD.lua",
+      "bytes": 16397,
+      "sha256": "ab86398fb0cbee6a79719cfceeca216293aaa3f1d3aeb4f62ee8f703730eb94f",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "fivem/natives/game/PATHFIND.lua",
+      "bytes": 27366,
+      "sha256": "da76fda9f5098ac7ba4fdf3bdb89d3d069d0121e613b34a895d7af5a89376727",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "fivem/natives/game/PED.lua",
+      "bytes": 256534,
+      "sha256": "8f86f6a1ae2346c0e356ee17478619914f022873654c066f9111fb5335b0e09e",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "fivem/natives/game/PHYSICS.lua",
+      "bytes": 16126,
+      "sha256": "f53c481a254300ec1739da22245dd964a0afec3ab4cc578de3ba15c32e3eefd1",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "fivem/natives/game/PLAYER.lua",
+      "bytes": 77678,
+      "sha256": "f5a4f0c1e9e6bf09f8d16507b748356f4b974feda9085e9ad5e08132e4944407",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "fivem/natives/game/RECORDING.lua",
+      "bytes": 4054,
+      "sha256": "ff2af75fe68dfb89c89c7a495ba0ebb4feba2434a757aa508f86de12afac9277",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "fivem/natives/game/REPLAY.lua",
+      "bytes": 2152,
+      "sha256": "56ca144782fcd90594e850afa6ae20afbaa5bdb639423bd2884a58e07fae2ae8",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "fivem/natives/game/SAVEMIGRATION.lua",
+      "bytes": 643,
+      "sha256": "e12ce96ab181a3c47c9f1b55a5c014e09727ae8c191fe67be28b2811138f1d9c",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "fivem/natives/game/SCRIPT.lua",
+      "bytes": 12181,
+      "sha256": "3b74fc1aed5678bb38bd0bfa7f00e55b91296f1412ea32bbbf9e5d0f4a75d59e",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "fivem/natives/game/SHAPETEST.lua",
+      "bytes": 7226,
+      "sha256": "1421898636b0fb743b6eb1ddfd2efd7b259ac625fc4c3d4066367517b72df331",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "fivem/natives/game/SOCIALCLUB.lua",
+      "bytes": 22541,
+      "sha256": "8c580b9f19354dddf6b851ad6ad36754545ef963ef5d3703c06910fe39e6a33e",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "fivem/natives/game/STATS.lua",
+      "bytes": 82373,
+      "sha256": "d2e42495798c157fb5e699905fabe53f55e0e2317a9da62a8c9e10d4cdac36d3",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "fivem/natives/game/STREAMING.lua",
+      "bytes": 35052,
+      "sha256": "d5f8a4bf46d90203585c91a59e6bd6c611ac922c0fa13ccec44d3ac3f2842c4a",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "fivem/natives/game/SYSTEM.lua",
+      "bytes": 8892,
+      "sha256": "9533277bbd714f5593320dba4412f2d39b7a10cc617799b0680e7b2cec9bcdda",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "fivem/natives/game/TASK.lua",
+      "bytes": 150103,
+      "sha256": "9c100144def6cc87131728e4a81556c962ae401f867f1384a56448486ec4cf47",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "fivem/natives/game/VEHICLE.lua",
+      "bytes": 271738,
+      "sha256": "7e758a1d7ee5982cba8bcb77aa84adb54f1d460688120807aa3dff96b777a5fa",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "fivem/natives/game/WATER.lua",
+      "bytes": 4556,
+      "sha256": "6f58c302b173de3190dda84810ade40ccd44006209af52400fd788e917d5b2a2",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "fivem/natives/game/WEAPON.lua",
+      "bytes": 45860,
+      "sha256": "8a12478868f059ff6139fd7f48015d6c344116a64895c416ccfd640c53b7ba71",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "fivem/natives/game/ZONE.lua",
+      "bytes": 6409,
+      "sha256": "06051c5baac6dd61247f1bb64a28e79792939d925089482915ef2567756fecc8",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "fivem/natives/platform.lua",
+      "bytes": 207258,
+      "sha256": "b9f7feec170980c36f1e7bd962937d172a2b6ccc684721d1168ea4089154bdd7",
+      "source": "official-platform-json"
+    },
+    {
+      "path": "fivem/runtime/citizen.lua",
+      "bytes": 5852,
+      "sha256": "60bf320216d368dd1087edd6e17ed1c43d36a867ddd719b7e139546af15f0a0b",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "fivem/runtime/env.lua",
+      "bytes": 2820,
+      "sha256": "7389096783094df68757709bba7633c6d9164d9cef32c711c2faf086f09bb278",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "fivem/runtime/event.lua",
+      "bytes": 3833,
+      "sha256": "8c2f4436349d0b3951939a4f59e83851950985dd9c925c26698b16beb5aede76",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "fivem/runtime/json.lua",
+      "bytes": 4325,
+      "sha256": "3e5d130f1889931d2129f11d8ebbb7f6488cebe09b5d8701a9d8be352322a897",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "fivem/runtime/luaglm.lua",
+      "bytes": 6782,
+      "sha256": "eaab60c01edb22d2a80e4713bff82605dea043089acab8b75913c9f0653e07bb",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "fivem/runtime/msgpack.lua",
+      "bytes": 4448,
+      "sha256": "ebf41812333e5d29b7cf46f2c1025816a16138e9a023bcf8e2a907cdece38098",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "fivem/runtime/promise.lua",
+      "bytes": 1551,
+      "sha256": "fedb7c9e00c71428062b0d57b48b5764971ec3f54703346678d80eee575313b6",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "plugin.lua",
+      "bytes": 1593,
+      "sha256": "8f1e794c2bb31429804f166e5f583e832ee70d2c462dbcdc2d782f6fd7d47871",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "qbcore/qbcore.lua",
+      "bytes": 5331,
+      "sha256": "1187a81aefd469c8c3323a601ddadb5ae8c0062e24ce166693aafa0bbdd212cd",
+      "source": "qbcore-curated"
+    },
+    {
+      "path": "redm/natives/game/_NAMESPACE4.lua",
+      "bytes": 457,
+      "sha256": "cdf771bc572a2bb5c5e683439b0f45b79d00a197950c3335aee9ba178c26f82f",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/AICOVERPOINT.lua",
+      "bytes": 5098,
+      "sha256": "d7019c84f2eaefc18e868db35399a8372761c3a7d53a4cb1951bda04b9503824",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/AITRANSPORT.lua",
+      "bytes": 7639,
+      "sha256": "5e756fbc84b2fe427b6aed80ed50bf7182d7b589d80a8efb8a6375cf7b4c5fd4",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/ANIMSCENE.lua",
+      "bytes": 26453,
+      "sha256": "a953af8a43ae85d86f941af32936ca77b2377a65ccbb62e7fc12c08ab3dbaddf",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/ATTRIBUTE.lua",
+      "bytes": 8552,
+      "sha256": "cbacb3bda575ac2b6ea50eafae5c62b471be9050c466da82f4457f3b7e09e9fb",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/AUDIO.lua",
+      "bytes": 56969,
+      "sha256": "8862132a60deddcd53eaff39fc2fd701571f757a8dca03e1e3229f020c943f3d",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/BOUNTY.lua",
+      "bytes": 7551,
+      "sha256": "1c83ebfd0110bca52c7512406c176b3360886988282db3ecf6acd1b3a388a282",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/BRAIN.lua",
+      "bytes": 2965,
+      "sha256": "474621a8d9e2a3e32e8d24ba0af90b0cbf47291b424b67f42ac8485196b36ee9",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/BUILTIN.lua",
+      "bytes": 5303,
+      "sha256": "f85fad60f63bae224c87389472b48dd2c8ae7e17b0c04dfb8e5f9b8c24a0345a",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/CAM.lua",
+      "bytes": 57592,
+      "sha256": "8e6e05c03426b961374f8f8d598712e2449c95d8402b5985343c533456a6b2fc",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/CLOCK.lua",
+      "bytes": 4385,
+      "sha256": "16f86e882e9c96477a16ff9504c3b3d00f36642f49b1a6d9691f794df47d13d0",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/COLLECTION.lua",
+      "bytes": 9803,
+      "sha256": "f017bede007cc68316fcdec59641dd60ab9774b7a20d116bfb3f6c803e30d86a",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/COMPANION.lua",
+      "bytes": 6023,
+      "sha256": "526a90b5378e8f28f15b803fc8ce0be503816f00ecb81d282e482f10d9ca3f19",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/COMPAPP.lua",
+      "bytes": 1031,
+      "sha256": "727c5143978766ca0a705b8a855b8ae9ec4349b5ffef24904b9dac587d12e3b4",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/COMPENDIUM.lua",
+      "bytes": 9483,
+      "sha256": "e6ed4f7c55a31b93b7bb7cb2b04bfdc43c8bb15743fd4fe2ece3521dcedda2f9",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/CRASHLOG.lua",
+      "bytes": 2876,
+      "sha256": "6de8cc8c2a54019a060db49bd095341239cd2f831daadf6e84684af38ff2bee3",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/CREW.lua",
+      "bytes": 4054,
+      "sha256": "f4c2f2ff3f04e983e51dd23f78ba974b57aeffa073b16ec6a7b723caee129217",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/DATABINDING.lua",
+      "bytes": 22039,
+      "sha256": "b7b797fce9b5c42cf41177f90d3a3bdb889aaf37916a77219c4f9dfe14b9a23c",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/DATAFILE.lua",
+      "bytes": 13884,
+      "sha256": "1db758581dcf9e93acc1de986d007f57ccb735fe328a43fe925a7f196c64b932",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/DEBUG.lua",
+      "bytes": 605,
+      "sha256": "3a0a32a18633ed62520b7f07ab35c9544c996287318dcc9984e6330415617e59",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/DECORATOR.lua",
+      "bytes": 4206,
+      "sha256": "4d691d9f175f3b64a48e1996cc64f59a33d00f93914ffde8146976fda3e1d758",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/DLC.lua",
+      "bytes": 891,
+      "sha256": "136ecead38c0a823fe2f30ed853022b0ca7cfe948b71ea8ef1861d058c35207e",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/ENTITY.lua",
+      "bytes": 84741,
+      "sha256": "51d619a395ab6bafd31fd3a490b9df31abb939119a7b8672c12b691d24e4024a",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/EVENT.lua",
+      "bytes": 10478,
+      "sha256": "196f7ad9338b41775b88b7a5e1335e8e6e68c30357c53fe1970960c3abaf25fb",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/FIRE.lua",
+      "bytes": 11483,
+      "sha256": "9c42cd7fee640246b759becfff609bd3ad86b8321c8d7c51188f31d72b8a8568",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/FLOCK.lua",
+      "bytes": 12108,
+      "sha256": "282d6e3511ad5cd08c13bf97dd3d57bad6d01d4d4e28980167edf089a17b0a89",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/GANG.lua",
+      "bytes": 9574,
+      "sha256": "a5fa6a535a5e9b92bf70538f75170ded48a8b23e6b0dd3972f48a3b28f514b85",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/GOOGLE_ANALYTICS.lua",
+      "bytes": 1080,
+      "sha256": "85047cc1ef9a0ebc638dec34e0d94128166363f5f1d700aad45d431014365afc",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/GRAPHICS.lua",
+      "bytes": 73827,
+      "sha256": "39c18ef3246539367109b7f78b228fef10b2beacdb549953d17f6cc06c91d5b2",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/HUD.lua",
+      "bytes": 47856,
+      "sha256": "2197e40e5e53fcfe032bf62af9a802838ec02d0e56bb335999f2b85bd720e872",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/IK.lua",
+      "bytes": 1199,
+      "sha256": "163debcc48ab09cd34195cfff191749bc1f643021d3edb2221750a8f6031863e",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/INTERACTION.lua",
+      "bytes": 1597,
+      "sha256": "36f3efa9ffbc1c6d6e62affab6afb2c000eaf206eb04c1f718977ddcdf8b540d",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/INTERIOR.lua",
+      "bytes": 8086,
+      "sha256": "cb5f14294b5393e5f8e6895f4b1e0a736517febb36e263017f6c29aa9dfac681",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/INVENTORY.lua",
+      "bytes": 25143,
+      "sha256": "09a6b7b246f86a7374d0c36efab5b2ef6020f2d0e158440c9b3a8ea268745fa8",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/ITEMDATABASE.lua",
+      "bytes": 24814,
+      "sha256": "7c983177b274d3d55c9edeba1236188213036c28c31880d2fc5b952329e797c8",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/ITEMSET.lua",
+      "bytes": 2669,
+      "sha256": "b2aaeb426c02005b46ae382e4f66e025f961bcf9642739ae8a2c4bb7c2a72fe7",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/LAW.lua",
+      "bytes": 35222,
+      "sha256": "7484d9726faf5716daaaffa82ba1b2357bf155830f96eafe48751e74fe29a3bb",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/LOCALIZATION.lua",
+      "bytes": 1273,
+      "sha256": "456a59263a55c763a6307f0e65e04617aa2578539cbdc3fec3699d2a8a6efa74",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/MAP.lua",
+      "bytes": 23189,
+      "sha256": "61ef9fce649d6a2356b27e296915840aba2a1def7448e2d05db62a04b4ab54fb",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/MINIGAME.lua",
+      "bytes": 10835,
+      "sha256": "7e2c31b526cebce7087ed2b248cc35f75b8b5eede5457e9f22211e725605badb",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/MISC.lua",
+      "bytes": 74020,
+      "sha256": "14b30c11e45a450b7f87e21c49c2221c4766c678f677897c490daeb9fe9f9ab2",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/MISSIONDATA.lua",
+      "bytes": 4790,
+      "sha256": "326c0e9d3a1013f432bfc68c89e642f925d8ff30666f898a0f396f23f3affdc7",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/MONEY.lua",
+      "bytes": 1903,
+      "sha256": "6d904ff961f835a24f88478661813c8c1dd84e2b81066fa190ffd4601eb494d2",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/NETSHOPPING.lua",
+      "bytes": 6439,
+      "sha256": "4761d08d07b4ef44adc1c1d4d9d937cd11967c659f8f7a45b5c34437efe69fc4",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/NETWORK.lua",
+      "bytes": 137195,
+      "sha256": "9e763499423392e8eed699ecbd3c2a32fb36f06c067bc1eefc308ab61301065d",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/OBJECT.lua",
+      "bytes": 44462,
+      "sha256": "bc58adf5bd0148a19d844de1741f8eea3f3d7df1024cc4512e9d99e307eff0d9",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/PAD.lua",
+      "bytes": 10646,
+      "sha256": "2e979f5eb060d01ce95d8d8ab0d6ccae407ef99e41e9518c0b3c7710fae8bf06",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/PATHFIND.lua",
+      "bytes": 23933,
+      "sha256": "563528aba42f30b7b3ec2c5ce6f66969485cae9f27414c3f7dcc35556f74f7f9",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/PED.lua",
+      "bytes": 279209,
+      "sha256": "056e6676090c6a52d5f73323c572c2960714638681f6fc693634d28e165fb6cd",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/PERSCHAR.lua",
+      "bytes": 11781,
+      "sha256": "8e3c070d61ac40e80ce0bb134c64d9558190987ebcfaf908fb1c8cf14833678b",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/PERSISTENCE.lua",
+      "bytes": 5399,
+      "sha256": "623aae6c067f161c0ad0ee1556aed4b5772568de071257b065c790913b3cd221",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/PHYSICS.lua",
+      "bytes": 20733,
+      "sha256": "43397dade10420e5eaa1f9fddfc45781220539d47a05264e323bf539b4029880",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/PLAYER.lua",
+      "bytes": 108029,
+      "sha256": "55545aba3b404f428c9693dc0d96d2756d4df2f6022e51ca49e319f9ca582c12",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/POPULATION.lua",
+      "bytes": 8412,
+      "sha256": "0e91022113146706b2e77433b839b24936c10c42bcb934eb48984188d575cd24",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/POSSE.lua",
+      "bytes": 7061,
+      "sha256": "bd7bf4154cffb2c7a9d034ea801660892c2f0216e32b59fc809339be7d87426e",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/PROPSET.lua",
+      "bytes": 11229,
+      "sha256": "87d8fa0f05399b3e7a0a6d92781632aee155607e58a7689738737b53a8be923a",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/QUEUE.lua",
+      "bytes": 461,
+      "sha256": "9c05fe5cbaa5f1cc1ad1befef6eb59434978cf458826429504b51b6b659da878",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/RECORDING.lua",
+      "bytes": 232,
+      "sha256": "a438c8f3d00713afd43d2c15b759a7711b7095bd155e6c28740b17f131ec6ff3",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/REPLAY.lua",
+      "bytes": 991,
+      "sha256": "7c4831de2259153dfd41ae6f92c8b5fc92120450712d3a7d5c4535bdf254fc9b",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/SAVE.lua",
+      "bytes": 6127,
+      "sha256": "3c542ee07e1098aa069734561969b72d7d52e8e44eb8b068ed12b9cc1a9af146",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/SCRIPTS.lua",
+      "bytes": 25128,
+      "sha256": "cd6fa8127252e046cfb872c7215198c63c0b6f619bd51e915c35672c012b0ef2",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/SHAPETEST.lua",
+      "bytes": 4111,
+      "sha256": "980b0f359af5d5d67a68efb4ea14280a368aa32c6caad83a32efb824a4c3a2f0",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/SOCIALCLUB.lua",
+      "bytes": 8691,
+      "sha256": "0d2a5e9fe599abef077223036158759e4a36db444760c03541c97334b7c2178e",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/SOCIALCLUBFEED.lua",
+      "bytes": 502,
+      "sha256": "2d3051a43a11c817e14658a2af20a66652a5f8e676b85400228f661656d42b55",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/SPACTIONPROXY.lua",
+      "bytes": 1399,
+      "sha256": "ed1d8e3dbef354e391ba179cc8ff7a43bb4f420c9de32f43a91bfe3c1d264d75",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/STATS.lua",
+      "bytes": 22014,
+      "sha256": "e8ea86f190b21c6368d9edc2f5fb5f2363671a512397456e96feb4aa30fe7e4a",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/STREAMING.lua",
+      "bytes": 26926,
+      "sha256": "94b67c24d1b4695bf071a5f6901cccb1d53b1f933394113b8c7ee21785b8f836",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/TASK.lua",
+      "bytes": 204539,
+      "sha256": "a52359400b008930fccbaf80315287cc4665237fb83dbfbae738cee79140a7bf",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/TELEMETRY.lua",
+      "bytes": 21154,
+      "sha256": "9ec2b9f0d42b4f2e3c54d0c8b7d132850bb2ca8f3e41fe497da2d4254d2f5bb0",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/TXD.lua",
+      "bytes": 1976,
+      "sha256": "d27550e45ac69739daf56df514c8bb112857303d292806297376cc230ad35388",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/UIAPPS.lua",
+      "bytes": 4621,
+      "sha256": "9128bdc7cd7fb9107c767039832921ee4913ee5304cb0fbdcde5c0fe1255cd87",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/UIDEBUG.lua",
+      "bytes": 812,
+      "sha256": "4e71515c6b7dde701d96d38d728810ee6df4af11037e9b81b1aaf31da0c1093d",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/UIEVENTS.lua",
+      "bytes": 1210,
+      "sha256": "792e3f6cca869cdbd19d6828486f55d968ac402a8bdccde80a6458e4a9c3a730",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/UIFEED.lua",
+      "bytes": 6866,
+      "sha256": "83b6ea921b668129661df88da2226678d05479d006fbd8c1d524f3a292b4d6ea",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/UILOG.lua",
+      "bytes": 7808,
+      "sha256": "42a65e0d19c7e3671b322e528a5f5ed35fcc9a4f9274b497b00bb61deb02b986",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/UIPINNING.lua",
+      "bytes": 253,
+      "sha256": "39d49c4b7fab63ec2d620cb4b26df90920fc04d064e3a8136eb95724dd67ae68",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/UISTATEMACHINE.lua",
+      "bytes": 2816,
+      "sha256": "a595483a6fe38217350b29d8132603b41e0c333999095a9e924f1e27652fc681",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/UISTICKYFEED.lua",
+      "bytes": 2181,
+      "sha256": "8dd28a0fa875edab5bae25c908ec401ef6a4f8ab65a5f6bb09193a4a43cc7f10",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/UITUTORIAL.lua",
+      "bytes": 1168,
+      "sha256": "98a1be446091e881e4fae75cdcc4e9fd9f210e304b197d090e5a588ebdadb2bc",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/UNLOCK.lua",
+      "bytes": 2325,
+      "sha256": "4e16cf1d39b90f8009e0f7cbc076609d26d27217602fe61fb3eaf7e6da23bb1f",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/VEHICLE.lua",
+      "bytes": 107657,
+      "sha256": "82498d88f38c363ae8f7cfa91aa53689960321f5c59564b94dd0b5cf4e3b9ee2",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/VOICE.lua",
+      "bytes": 5401,
+      "sha256": "a560ade8abac26dcb6ed84b94afd07cbb8ca800fe2ed4b9beb2511baeabcbb28",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/VOLUME.lua",
+      "bytes": 24057,
+      "sha256": "a056606a22a34bc7c237a4cd83e8fdd44c2ce2a429847c0873f39b97e97b11db",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/WATER.lua",
+      "bytes": 4577,
+      "sha256": "c05458c18ed754ce4334e0a370d991df419573c29b8ee892745c04f6ccf61b72",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/WEAPON.lua",
+      "bytes": 68991,
+      "sha256": "95e0b44241f08b0b7d0c2b1c8aa4cae9ebb6f9736761a55f6872f00446346b87",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/game/ZONE.lua",
+      "bytes": 1103,
+      "sha256": "93852296b675f7aaf6deb10d8bff6659a99f0401ec605d59664f96ac1ca7bebb",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/natives/platform.lua",
+      "bytes": 43965,
+      "sha256": "65b01d92e9305a51986d49ca2098106fc6aefb23b570dc56c41d5bad68a67d33",
+      "source": "official-platform-json"
+    },
+    {
+      "path": "redm/runtime/citizen.lua",
+      "bytes": 5852,
+      "sha256": "60bf320216d368dd1087edd6e17ed1c43d36a867ddd719b7e139546af15f0a0b",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/runtime/env.lua",
+      "bytes": 2820,
+      "sha256": "7389096783094df68757709bba7633c6d9164d9cef32c711c2faf086f09bb278",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/runtime/event.lua",
+      "bytes": 3833,
+      "sha256": "8c2f4436349d0b3951939a4f59e83851950985dd9c925c26698b16beb5aede76",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/runtime/json.lua",
+      "bytes": 4325,
+      "sha256": "3e5d130f1889931d2129f11d8ebbb7f6488cebe09b5d8701a9d8be352322a897",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/runtime/luaglm.lua",
+      "bytes": 6782,
+      "sha256": "eaab60c01edb22d2a80e4713bff82605dea043089acab8b75913c9f0653e07bb",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/runtime/msgpack.lua",
+      "bytes": 4448,
+      "sha256": "ebf41812333e5d29b7cf46f2c1025816a16138e9a023bcf8e2a907cdece38098",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "redm/runtime/promise.lua",
+      "bytes": 1551,
+      "sha256": "fedb7c9e00c71428062b0d57b48b5764971ec3f54703346678d80eee575313b6",
+      "source": "overextended-addon"
+    },
+    {
+      "path": "THIRD_PARTY_LICENSES/CitizenFX-platform-native-source-NOTICE.txt",
+      "bytes": 532,
+      "sha256": "270b136f5691a7b844a4c9623067a2ec7238ba7fb6c1e117b5868af9dd703682",
+      "source": "official-platform-json"
+    },
+    {
+      "path": "THIRD_PARTY_LICENSES/overextended-fivem-lls-addon-MIT.txt",
+      "bytes": 1068,
+      "sha256": "9e34d5efeba04be09dec582c80780c3a0263162b2d62346f296d941cc7ce6439",
+      "source": "overextended-addon"
+    }
+  ]
+}

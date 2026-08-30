@@ -20,6 +20,8 @@
     "audit:dependencies": "npm audit --audit-level=moderate",
     "prepare:luals": "node scripts/prepare-luals.mjs",
     "check:luals": "node scripts/check-luals-current.mjs",
+    "verify:lua-definitions": "node scripts/verify-lua-definitions.mjs",
+    "update:lua-definitions": "node scripts/update-lua-definitions.mjs",
     "dist": "npm run dist -w qb-studio",
     "verify:package": "node scripts/verify-package.mjs",
     "release": "semantic-release"

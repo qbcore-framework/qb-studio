@@ -10,6 +10,7 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 import { extractFile, listPackage } from "@electron/asar";
 
 import { verifyResourceTemplates } from "./verify-resource-templates.mjs";
+import { verifyLuaDefinitions } from "./verify-lua-definitions.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const releaseDir = path.join(root, "release");
@@ -172,9 +173,14 @@ if (
 ) {
   throw new Error("The packaged Lua language server does not match the reviewed release manifest.");
 }
-const luaLibrary = path.join(releaseDir, "win-unpacked", "resources", "lua-library", "qb-studio-cfx.lua");
-if (!fs.existsSync(luaLibrary) || fs.statSync(luaLibrary).size < 1_000) {
-  throw new Error("The packaged QBCore/Cfx Lua definitions are missing or incomplete.");
+const luaLibrary = path.join(releaseDir, "win-unpacked", "resources", "lua-library");
+const packagedDefinitions = verifyLuaDefinitions(luaLibrary);
+if (
+  packagedDefinitions.counts.fivem !== 52 ||
+  packagedDefinitions.counts.redm !== 94 ||
+  packagedDefinitions.counts.qbcore < 1
+) {
+  throw new Error("The packaged FiveM, RedM, or QBCore Lua definition pack is incomplete.");
 }
 const packagedTemplateCatalog = path.join(releaseDir, "win-unpacked", "resources", "resource-templates");
 const packagedTemplates = verifyResourceTemplates(packagedTemplateCatalog);

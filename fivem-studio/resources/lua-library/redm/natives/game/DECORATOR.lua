@@ -1,0 +1,126 @@
+---@meta
+
+---**`DECORATOR` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xD9D1CDBF3464DCDF)  
+---Returns whether or not the specified property is set for the entity.
+---@param entity integer
+---@param propertyName string
+---@return boolean
+function DecorExistOn(entity, propertyName) end
+
+---**`DECORATOR` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xDEF3F1B071ABB197)  
+---This native does not have an official description.
+---@param entity integer
+---@param propertyName string
+---@return boolean
+function DecorGetBool(entity, propertyName) end
+
+---**`DECORATOR` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xE5FF70CD842CA9D4)  
+---This native does not have an official description.
+---@param entity integer
+---@param propertyName string
+---@return number
+function DecorGetFloat(entity, propertyName) end
+
+---**`DECORATOR` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x44DB62727762FD9B)  
+---This native does not have an official description.
+---@param entity integer
+---@param propertyName string
+---@return integer
+function DecorGetInt(entity, propertyName) end
+
+---**`DECORATOR` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xB1682B2443F0540B)  
+---This native does not have an official description.
+---@param entity integer
+---@param propertyName string
+---@return integer
+function DecorGetPlayerIndex(entity, propertyName) end
+
+---**`DECORATOR` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x72355278C069F272)  
+---type: see DECOR_REGISTER
+---@param propertyName string
+---@param type integer
+---@return boolean
+function DecorIsRegisteredAsType(propertyName, type) end
+
+---**`DECORATOR` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x0B253D644E3C36B3)  
+---This native does not have an official description.
+---@param propertyName string
+---@param type integer
+function DecorRegister(propertyName, type) end
+
+---**`DECORATOR` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x4587374F88B7F6C2)  
+---Old Name: _DECOR_REGISTER_2
+---@param propertyName string
+---@param type integer
+---@param isNetworked boolean
+function DecorRegisterNetworked(propertyName, type, isNetworked) end
+
+---**`DECORATOR` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x2BA7F5877A088A1D)  
+---This native does not have an official description.
+---@param entity integer
+---@param propertyName string
+---@return boolean
+function DecorRemove(entity, propertyName) end
+
+---**`DECORATOR` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x88942780E0ADEA42)  
+---This native does not have an official description.
+---@param entity integer
+---@return boolean
+function DecorRemoveAll(entity) end
+
+---**`DECORATOR` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xFE26E4609B1C3772)  
+---This function sets metadata of type bool to specified entity.
+---
+---@param entity integer
+---@param propertyName string
+---@param value boolean
+---@return boolean
+function DecorSetBool(entity, propertyName, value) end
+
+---**`DECORATOR` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x238F8B0C1C7FE834)  
+---This native does not have an official description.
+---@param entity integer
+---@param propertyName string
+---@param value number
+---@return boolean
+function DecorSetFloat(entity, propertyName, value) end
+
+---**`DECORATOR` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xE88F4D7F52A6090F)  
+---Sets property to int.
+---@param entity integer
+---@param propertyName string
+---@param value integer
+---@return boolean
+function DecorSetInt(entity, propertyName, value) end
+
+---**`DECORATOR` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x4BDC83150D43772D)  
+---Old name: _DECOR_SET_UINT8
+---@param entity integer
+---@param propertyName string
+---@param value integer
+---@return boolean
+function DecorSetPlayerIndex(entity, propertyName, value) end
+
+---**`DECORATOR` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x0671C1A3FF7AFDFC)  
+---This native does not have an official description.
+---@param entity integer
+---@param propertyName string
+---@param value string
+---@return boolean
+function DecorSetString(entity, propertyName, value) end
+

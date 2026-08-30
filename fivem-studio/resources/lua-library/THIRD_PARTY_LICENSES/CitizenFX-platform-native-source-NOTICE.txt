@@ -1,0 +1,10 @@
+QB Studio platform-native signature source notice
+
+Source: https://static.cfx.re/natives/natives_cfx.json
+Reviewed SHA-256: 165e33a362d00406abc08e35fe6656b11404c391362a9d286a85644081180451
+Provider: CitizenFX Collective / Cfx.re
+
+QB Studio generates only factual native names, hashes, API sets, parameter names/types,
+and result types from this dataset. Upstream descriptions, examples, and prose parameter
+or result documentation are not copied. Each generated declaration links to the upstream
+native reference for documentation.

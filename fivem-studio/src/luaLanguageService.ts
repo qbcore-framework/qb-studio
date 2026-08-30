@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import * as monaco from "monaco-editor/editor";
 
+import type { CfxTarget } from "./global";
+
 export type LuaServiceStatus = "off" | "starting" | "ready" | "stopped" | "error";
 
 type JsonObject = Record<string, unknown>;
@@ -113,13 +115,20 @@ function locationList(value: unknown): monaco.languages.Location[] {
   });
 }
 
-function luaSettings(mode: "balanced" | "full", libraryRoot: string): JsonObject {
+const CFXLUA_NONSTANDARD_SYMBOLS = ["`", "/**/", "+=", "-=", "*=", "/=", "<<=", ">>=", "&=", "|=", "^="];
+
+function luaSettings(
+  mode: "balanced" | "full",
+  libraryRoots: string[],
+  pluginPath: string,
+  target: CfxTarget,
+): JsonObject {
   const full = mode === "full";
   return {
     addonManager: { enable: false },
     completion: { callSnippet: "Replace", keywordSnippet: "Replace", showWord: "Fallback", workspaceWord: true },
     diagnostics: {
-      globals: ["QBCore", "Citizen", "exports", "source", "json", "promise", "lib"],
+      globals: [...(target === "redm" ? [] : ["QBCore"]), "Citizen", "exports", "source", "json", "promise", "lib"],
       libraryFiles: "Disable",
       workspaceDelay: full ? 1_500 : 4_000,
       workspaceEvent: "OnSave",
@@ -129,7 +138,8 @@ function luaSettings(mode: "balanced" | "full", libraryRoot: string): JsonObject
     hint: { enable: full, paramName: "Literal", setType: false },
     runtime: {
       version: "Lua 5.4",
-      nonstandardSymbol: ["`"],
+      nonstandardSymbol: CFXLUA_NONSTANDARD_SYMBOLS,
+      plugin: pluginPath,
       path: ["?.lua", "?/init.lua", "?/shared.lua", "?/client.lua", "?/server.lua"],
       pathStrict: false,
     },
@@ -139,7 +149,7 @@ function luaSettings(mode: "balanced" | "full", libraryRoot: string): JsonObject
       checkThirdParty: "Disable",
       ignoreDir: [".git", "node_modules", "cache", "logs", "crashes", "txData"],
       ignoreSubmodules: true,
-      library: [libraryRoot],
+      library: libraryRoots,
       maxPreload: full ? 10_000 : 2_000,
       preloadFileSize: full ? 2_000 : 500,
       useGitIgnore: true,
@@ -187,10 +197,11 @@ class LuaLanguageClient {
     for (const subscriber of this.subscribers) subscriber(status, message);
   }
 
-  async start(mode: "off" | "balanced" | "full"): Promise<void> {
+  async start(mode: "off" | "balanced" | "full", expectedTarget: CfxTarget): Promise<void> {
     const generation = ++this.generation;
     this.resetConnection();
-    void window.api.lua.stop();
+    await window.api.lua.stop();
+    if (generation !== this.generation) return;
     if (mode === "off") {
       this.setStatus("off");
       return;
@@ -201,9 +212,12 @@ class LuaLanguageClient {
       const session = await window.api.lua.start();
       if (generation !== this.generation) return;
       if (!session.ok) throw new Error(session.error);
+      if (session.target !== expectedTarget) {
+        throw new Error(`Lua definition target changed while starting (${expectedTarget} to ${session.target}).`);
+      }
       this.workspaceUri = monaco.Uri.file(session.workspaceRoot).toString(true);
       this.workspaceName = session.workspaceRoot.split(/[/\\]/).pop() || "QB Studio";
-      this.settings = luaSettings(session.mode, session.libraryRoot);
+      this.settings = luaSettings(session.mode, session.libraryRoots, session.pluginPath, session.target);
       const initialized = await this.request("initialize", {
         processId: null,
         clientInfo: { name: "QB Studio", version: "1" },
@@ -560,31 +574,32 @@ class LuaLanguageClient {
 
 let singleton: LuaLanguageClient | null = null;
 let activeConsumers = 0;
-let activeMode: "off" | "balanced" | "full" | null = null;
+let activeSessionKey: string | null = null;
 
 function client(): LuaLanguageClient {
   singleton ??= new LuaLanguageClient();
   return singleton;
 }
 
-export function useLuaLanguageService(active: boolean, mode: "off" | "balanced" | "full") {
+export function useLuaLanguageService(active: boolean, mode: "off" | "balanced" | "full", target: CfxTarget) {
   const [status, setStatus] = useState<{ state: LuaServiceStatus; message?: string }>({ state: mode === "off" ? "off" : "stopped" });
   useEffect(() => client().subscribe((state, message) => setStatus({ state, message })), []);
   useEffect(() => {
     if (!active) return;
     activeConsumers += 1;
-    if (activeConsumers === 1 || activeMode !== mode) {
-      activeMode = mode;
-      void client().start(mode);
+    const sessionKey = `${mode}:${target}`;
+    if (activeSessionKey !== sessionKey) {
+      activeSessionKey = sessionKey;
+      void client().start(mode, target);
     }
     return () => {
       activeConsumers = Math.max(0, activeConsumers - 1);
       if (activeConsumers === 0) {
-        activeMode = null;
+        activeSessionKey = null;
         client().stop();
       }
     };
-  }, [active, mode]);
+  }, [active, mode, target]);
   return status;
 }
 

@@ -1,0 +1,1240 @@
+---@meta
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xD99229FE93B46286)  
+---Registers a door, hashes: https://github.com/femga/rdr3_discoveries/tree/master/doorHashes
+---@param doorHash integer | string
+---@param p1 boolean
+---@param p2 boolean
+---@param p3 boolean
+---@param threadId integer
+---@param p5 integer
+---@param p6 boolean
+function AddDoorToSystemNew(doorHash, p1, p2, p3, threadId, p5, p6) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xE2B3B852B537C398)  
+---This native does not have an official description.
+---@param enabled boolean
+function AllowDamageEventsForNonNetworkedObjects(enabled) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x8DC39368BDD57755)  
+---This native does not have an official description.
+---@param pickupObject integer
+---@param ped integer
+function AttachPortablePickupToPed(pickupObject, ped) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xB8F5062070BB6DBD)  
+---This native does not have an official description.
+---@param p0 any
+---@param p1 any
+function BlockPickupFromPlayerCollection(p0, p1) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x8462BE2341A55B6F)  
+---This native does not have an official description.
+---@param object integer
+function BreakAllObjectFragmentBones(object) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xE7E4C198B0185900)  
+---This native does not have an official description.
+---@param object integer
+---@param p1 any
+---@param p2 boolean
+function BreakObjectFragmentChild(object, p1, p2) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x0943113E02322164)  
+---Checks whether a specific door-related action/state flag is active for the given door object.
+---Observed behavior:
+---- flag 32: returns true when the door is being kicked (kick action event)
+---- flag 23: returns true if the door has been previously opened by kicking (post-kick state)
+---- flag 8:  returns true when attempting to open the door while it is locked
+---@param object integer
+---@param p1 integer
+---@return any
+function CheckDoorActionFlag(object, p1) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x5EAAD83F8CFB4575)  
+---Old name: _GET_PICKUP_HASH
+---@param pickupHash integer | string
+---@return integer
+function ConvertOldPickupTypeToNew(pickupHash) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x673966A0C0FD7171)  
+---flags: see CREATE_PICKUP
+---@param pickupHash integer | string
+---@param x number
+---@param y number
+---@param z number
+---@param flags integer
+---@param amount integer
+---@param modelHash integer | string
+---@param createAsScriptObject boolean
+---@param scriptHostObject boolean
+---@param customAmmoType integer
+---@param p10 number
+---@return integer
+function CreateAmbientPickup(pickupHash, x, y, z, flags, amount, modelHash, createAsScriptObject, scriptHostObject, customAmmoType, p10) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x509D5878EB39E842)  
+---This native does not have an official description.
+---@param modelHash integer | string
+---@param x number
+---@param y number
+---@param z number
+---@param isNetwork boolean
+---@param bScriptHostObj boolean
+---@param dynamic boolean
+---@param p7 boolean
+---@param p8 boolean
+---@return integer
+function CreateObject(modelHash, x, y, z, isNetwork, bScriptHostObj, dynamic, p7, p8) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x9A294B2138ABB884)  
+---This native does not have an official description.
+---@param modelHash integer | string
+---@param x number
+---@param y number
+---@param z number
+---@param isNetwork boolean
+---@param bScriptHostObj boolean
+---@param dynamic boolean
+---@param p7 boolean
+---@return integer
+function CreateObjectNoOffset(modelHash, x, y, z, isNetwork, bScriptHostObj, dynamic, p7) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xB6CBD40F8EA69E8A)  
+---This native does not have an official description.
+---@param object integer
+---@return boolean
+function CreateObjectSkeleton(object) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xFBA08C503DD5FA58)  
+---https://github.com/Halen84/RDR3-Native-Flags-And-Enums/tree/main/Placement%20Flags
+---https://github.com/femga/rdr3_discoveries/blob/master/objects/pickup_list.lua
+---@param pickupHash integer | string
+---@param x number
+---@param y number
+---@param z number
+---@param flags integer
+---@param p5 integer
+---@param p6 boolean
+---@param modelHash integer | string
+---@param p8 integer
+---@param p9 number
+---@param p10 any
+---@return integer
+function CreatePickup(pickupHash, x, y, z, flags, p5, p6, modelHash, p8, p9, p10) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x891804727E0A98B7)  
+---flags: see CREATE_PICKUP
+---@param pickupHash integer | string
+---@param posX number
+---@param posY number
+---@param posZ number
+---@param rotX number
+---@param rotY number
+---@param rotZ number
+---@param flags integer
+---@param p8 integer
+---@param p9 integer
+---@param p10 boolean
+---@param modelHash integer | string
+---@param p12 integer
+---@param p13 number
+---@param p14 any
+---@return integer
+function CreatePickupRotate(pickupHash, posX, posY, posZ, rotX, rotY, rotZ, flags, p8, p9, p10, modelHash, p12, p13, p14) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x2EAF1FDB2FB55698)  
+---This native does not have an official description.
+---@param pickupHash integer | string
+---@param x number
+---@param y number
+---@param z number
+---@param placeOnGround boolean
+---@param modelHash integer | string
+---@return integer
+function CreatePortablePickup(pickupHash, x, y, z, placeOnGround, modelHash) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xE4EFB315BCD2A838)  
+---This native does not have an official description.
+---@param object integer
+---@param bone integer
+function DamageBoneOnProp(object, bone) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xAAACF33CBF9B990A)  
+---Damages or breaks a specific predefined fragment/section of an object using the provided fragment index.
+---Unlike generic damage systems, this native appears to directly target one of the object's internal fracture sections. The index parameter determines which part of the object is damaged or broken.
+---Different index values cause different fragments of the object to detach or break.
+---@param object integer
+---@param fragmentIndex integer
+function DamageObjectFragmentByIndex(object, fragmentIndex) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x931914268722C263)  
+---Deletes the specified object, then sets the handle pointed to by the pointer to NULL.
+---@param object integer
+function DeleteObject(object) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xCF463D1E9A0AECB1)  
+---This native does not have an official description.
+---@param pickupObject integer
+function DetachPortablePickupFromPed(pickupObject) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xBFA48E2FF417213F)  
+---This native does not have an official description.
+---@param x number
+---@param y number
+---@param z number
+---@param radius number
+---@param hash integer | string
+---@param p5 boolean
+---@return boolean
+function DoesObjectOfTypeExistAtCoords(x, y, z, radius, hash, p5) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xAFC1CA75AD4074D1)  
+---This native does not have an official description.
+---@param pickup integer
+---@return boolean
+function DoesPickupExist(pickup) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xD9EFB6DBF7DAAEA3)  
+---This native does not have an official description.
+---@param pickupObject integer
+---@return boolean
+function DoesPickupObjectExist(pickupObject) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xF9C36251F6E48E33)  
+---This native does not have an official description.
+---@param pickupHash integer | string
+---@param x number
+---@param y number
+---@param z number
+---@param radius number
+---@return boolean
+function DoesPickupOfTypeExistInArea(pickupHash, x, y, z, radius) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x52AF537A0C5B8AAD)  
+---This native does not have an official description.
+---@param object integer
+---@return boolean
+function DoesRayfireMapObjectExist(object) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x985767F5FA45BC44)  
+---This native does not have an official description.
+---@param doorHash integer | string
+function DoorSystemChangeScriptOwner(doorHash) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x6E2AA80BB0C03728)  
+---Checks whether a specific door action/state flag is active for the given door hash.
+---- flag 32: returns true while the door is being kicked
+---- flag 23: returns true after the door has been opened by kicking
+---- flag 8:  returns true when trying to open a locked door
+---@param doorHash integer | string
+---@param flag integer
+---@return boolean
+function DoorSystemCheckActionFlag(doorHash, flag) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x5230BF34EB0EC645)  
+---Clears the stored player ID for a door that was force-opened via physical interaction
+---(e.g. kick or shoulder bash).
+---This resets the value returned by:_DOOR_SYSTEM_GET_FORCED_OPEN_PLAYER
+---@param doorHash integer | string
+function DoorSystemClearForcedOpenPlayer(doorHash) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x276AAF0F1C7F2494)  
+---This native does not have an official description.
+---@param doorHash integer | string
+---@param p1 boolean
+function DoorSystemForceShut(doorHash, p1) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x8433E1954BE323FC)  
+---This native does not have an official description.
+---@param doorHash integer | string
+---@return number
+function DoorSystemGetAutomaticRate(doorHash) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x160AA1B32F6139B8)  
+---This native does not have an official description.
+---@param doorHash integer | string
+---@return integer
+function DoorSystemGetDoorState(doorHash) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xEBA314768FB35D58)  
+---Returns the player who forced the specified door open using physical interaction
+---(e.g. kicking or shoulder bashing).
+---If a player breaks or forces the door open, this native returns the Player ID directly.
+---@param doorHash integer | string
+---@return integer
+function DoorSystemGetForcedOpenPlayer(doorHash) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x65499865FCA6E5EC)  
+---This native does not have an official description.
+---@param doorHash integer | string
+---@return number
+function DoorSystemGetOpenRatio(doorHash) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x1F1FABFE9B2A1254)  
+---This native does not have an official description.
+---@param doorHash integer | string
+---@param p1 boolean
+function DoorSystemSetAbleToChangeOpenRatioWhileLocked(doorHash, p1) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x9BA001CB45CBF627)  
+---This native does not have an official description.
+---@param doorHash integer | string
+---@param distance number
+function DoorSystemSetAutomaticDistance(doorHash, distance) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x03C27E13B42A0E82)  
+---This native does not have an official description.
+---@param doorHash integer | string
+---@param rate number
+function DoorSystemSetAutomaticRate(doorHash, rate) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x1BC47A9DEDC8DF5D)  
+---_ALLOW_* - _ATTACH_*
+---@param doorHash integer | string
+---@param disable boolean
+function DoorSystemSetAutomaticState(doorHash, disable) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x6BAB9442830C7F53)  
+---Door lock states:
+---enum eDoorState
+---{
+---	DOORSTATE_INVALID = -1,
+---	DOORSTATE_UNLOCKED,
+---	DOORSTATE_LOCKED_UNBREAKABLE,
+---	DOORSTATE_LOCKED_BREAKABLE,
+---	DOORSTATE_HOLD_OPEN_POSITIVE,
+---	DOORSTATE_HOLD_OPEN_NEGATIVE
+---};
+---@param doorHash integer | string
+---@param state integer
+function DoorSystemSetDoorState(doorHash, state) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xB6E6FBA95C7324AC)  
+---Sets the ajar angle of a door.
+---Ranges from -1.0 to 1.0, and 0.0 is closed / default.
+---@param doorHash integer | string
+---@param ajar number
+---@param forceUpdate boolean
+function DoorSystemSetOpenRatio(doorHash, ajar, forceUpdate) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xB3B1546D23DF8DE1)  
+---swing door open between 2 points
+---Requires DOOR_SYSTEM_SET_DOOR_STATE(hash, 0) beforehand
+---- If door is locked (state=1), the impulse is ignored
+---@param doorHash integer | string
+---@param dirX number
+---@param dirY number
+---@param dirZ number
+---@param reverse boolean
+function DoorSystemSwingOpen(doorHash, dirX, dirY, dirZ, reverse) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xF9C1681347C8BD15)  
+---This native does not have an official description.
+---@param object integer
+function FixObjectFragment(object) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x758A5C1B3B1E1990)  
+---This native does not have an official description.
+---@param p0 any
+function ForcePickupRegenerate(p0) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x44B09A23D728045A)  
+---This native does not have an official description.
+---@param pickupHash integer | string
+---@return integer
+function GetAmmoTypeFromPickupType(pickupHash) end
+
+---**`OBJECT` `client`**  
+---[Native Documentation](https://rdr3natives.com/?_0xE143FA2249364369)  
+---Returns the closest object of a specified type within a given radius from a specified position
+---@param x number
+---@param y number
+---@param z number
+---@param radius number
+---@param modelHash integer | string
+---@param missionScriptObject boolean
+---@param scriptHostObject boolean
+---@param networkObject boolean
+---@return integer
+function GetClosestObjectOfType(x, y, z, radius, modelHash, missionScriptObject, scriptHostObject, networkObject) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x4D8611DFE1126478)  
+---Checks whether the specified door has the "knocking when locked" interaction enabled
+---@param doorHash integer | string
+---@return boolean
+function GetDoorKnockingWhenLocked(doorHash) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xFA3B61EC249B4674)  
+---This native does not have an official description.
+---@param object integer
+---@return number
+function GetLightIntensityFromObject(object) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x58DE624FA7FB0E7F)  
+---Returns the number of breakable fragments (indexed sections) defined for the specified object.
+---These fragments can be triggered individually using natives that target object fracture indices. eg: a box of bottles can have multiple fragments that can be broken individually.
+---@param object integer
+---@return integer
+function GetObjectFragmentCount(object) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xB6FBFD079B8D0596)  
+---This native does not have an official description.
+---@param p0 any
+---@param p1 boolean
+---@return number
+function GetObjectFragmentDamageHealth(p0, p1) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x3397CD4E0353DFBA)  
+---Returns float value to be used with _SET_LIGHT_INTENSITY_FOR_OBJECT
+---@param object integer
+---@return number
+function GetObjectLightIntensity(object) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x163E252DE035A133)  
+---Old name: _GET_OBJECT_OFFSET_FROM_COORDS
+---@param xPos number
+---@param yPos number
+---@param zPos number
+---@param heading number
+---@param xOffset number
+---@param yOffset number
+---@param zOffset number
+---@return vector3
+function GetOffsetFromCoordAndHeadingInWorldCoords(xPos, yPos, zPos, heading, xOffset, yOffset, zOffset) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x225B8B35C88029B3)  
+---This native does not have an official description.
+---@param pickup integer
+---@return vector3
+function GetPickupCoords(pickup) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x5099BC55630B25AE)  
+---This native does not have an official description.
+---@param pickup integer
+---@return integer
+function GetPickupObject(pickup) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xB48FCED898292E52)  
+---This native does not have an official description.
+---@param x number
+---@param y number
+---@param z number
+---@param radius number
+---@param name string
+---@return integer
+function GetRayfireMapObject(x, y, z, radius, name) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x260EE4FDBDF4DB01)  
+---This native does not have an official description.
+---@param object integer
+---@return number
+function GetRayfireMapObjectAnimPhase(object) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x6E16BC2503FF1FF0)  
+---This native does not have an official description.
+---@param p0 any
+---@param p1 any
+---@param p2 any
+---@param p3 any
+---@param p4 any
+---@param p5 any
+---@return vector3
+function GetSafePickupCoords(p0, p1, p2, p3, p4, p5) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x899BA936634A322E)  
+---This native does not have an official description.
+---@param object integer
+---@return integer
+function GetStateOfRayfireMapObject(object) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x08F96CA6C551AD51)  
+---This native does not have an official description.
+---@param pickupHash integer | string
+---@return integer
+function GetWeaponTypeFromPickupType(pickupHash) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x761B0E69AC4D007E)  
+---This native does not have an official description.
+---@param p0 number
+---@param p1 number
+---@param p2 number
+---@param p3 number
+---@param modelHash integer | string
+---@param p5 any
+---@return boolean
+function HasClosestObjectOfTypeBeenBroken(p0, p1, p2, p3, modelHash, p5) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x8ABFB70C49CC43E2)  
+---This native does not have an official description.
+---@param p0 any
+---@return boolean
+function HasObjectBeenBroken(p0) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x80EC48E6679313F9)  
+---This native does not have an official description.
+---@param pickup integer
+---@return boolean
+function HasPickupBeenCollected(pickup) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x2777150CC7D9365E)  
+---This native does not have an official description.
+---@param pickupObject integer
+---@param toggle boolean
+function HidePickupObject(pickupObject, toggle) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xC531EE8A1145A149)  
+---This native does not have an official description.
+---@param doorHash integer | string
+---@return boolean
+function IsDoorClosed(doorHash) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xB5DED7B65C604FDF)  
+---This native does not have an official description.
+---@param doorHash integer | string
+---@return boolean
+function IsDoorRegisteredWithNetwork(doorHash) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x4F89DAD4156BA145)  
+---Returns true if door is alredy registered with owner
+---@param doorHash integer | string
+---@return boolean
+function IsDoorRegisteredWithOwner(doorHash) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xC153C43EA202C8C1)  
+---This native does not have an official description.
+---@param doorHash integer | string
+---@return boolean
+function IsDoorRegisteredWithSystem(doorHash) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x20135AF9C10D2A3D)  
+---returns true if the model hash is a portable pickup its used before creating a portable pick up for example
+---@param modelHash integer | string
+---@return boolean
+function IsModelAPortablePickup(modelHash) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x0378C08504160D0D)  
+---This native does not have an official description.
+---@param object integer
+---@return boolean
+function IsObjectAPortablePickup(object) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x8B32ACE6326A7546)  
+---This native does not have an official description.
+---@param object integer
+---@return boolean
+function IsObjectVisible(object) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x9F52AD67D1A91BAD)  
+---This native does not have an official description.
+---@param pickupObject integer
+---@param teamId integer
+---@return boolean
+function IsPickupPickableForTeam(pickupObject, teamId) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x007BD043587F7C82)  
+---This native does not have an official description.
+---@param pickupHash integer | string
+---@return boolean
+function IsPickupTypeValid(pickupHash) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x2A70BAE8883E4C81)  
+---This native does not have an official description.
+---@param p0 number
+---@param p1 number
+---@param p2 number
+---@param p3 number
+---@param p4 number
+---@param p5 number
+---@param p6 number
+---@param p7 number
+---@param p8 number
+---@param p9 number
+---@param p10 boolean
+---@param p11 boolean
+---@return boolean
+function IsPointInAngledArea(p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x1461DF6DB886BE3F)  
+---_PRE* or _Q* or _RE*
+---@param object integer
+function MakeItemCarriable(object) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x08C5825A2932EA7B)  
+---This native does not have an official description.
+---@param p0 any
+---@return any
+function N_0x08c5825a2932ea7b(p0) end
+
+---**`OBJECT` `client`**  
+---[Native Documentation](https://rdr3natives.com/?_0x0C0A373D181BF900)  
+---something to do with doors lockdown when navmesh is swapping?UPDATE_WORLD_STATE  seems to be for unlocking something
+---@param doorHash integer | string
+function N_0x0c0a373d181bf900(doorHash) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x1F5E07E14A86FAFC)  
+---_SET_A(MBIENT_PICKUP_?)*
+---@param p0 boolean
+function N_0x1f5e07e14a86fafc(p0) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x22031584496CFB70)  
+---This native does not have an official description.
+---@param p0 any
+---@param p1 any
+function N_0x22031584496cfb70(p0, p1) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x235C863DA77BD88D)  
+---This native does not have an official description.
+---@param p0 any
+---@param p1 any
+---@param p2 any
+---@return any
+function N_0x235c863da77bd88d(p0, p1, p2) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x250EBB11E81A10BE)  
+---This native does not have an official description.
+---@param p0 any
+---@return any
+function N_0x250ebb11e81a10be(p0) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x2BF1953C0C21AC88)  
+---This native does not have an official description.
+---@param p0 any
+---@return any
+function N_0x2bf1953c0c21ac88(p0) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x3A77DAE8B4FD7586)  
+---This native does not have an official description.
+---@param p0 any
+---@param p1 any
+function N_0x3a77dae8b4fd7586(p0, p1) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x3DF1A0A58498E209)  
+---This native does not have an official description.
+---@param object integer
+---@param p1 any
+function N_0x3df1a0a58498e209(object, p1) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x3E2616E7EA539480)  
+---This native does not have an official description.
+---@param p0 any
+---@return any
+function N_0x3e2616e7ea539480(p0) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x46CBCF0E98A4E156)  
+---This native does not have an official description.
+---@param p0 any
+---@param p1 any
+function N_0x46cbcf0e98a4e156(p0, p1) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x491439AEF410A2FC)  
+---This native does not have an official description.
+---@param p0 any
+function N_0x491439aef410a2fc(p0) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x4AE07EBA3462C5D5)  
+---This native does not have an official description.
+---@param p0 any
+---@param p1 any
+function N_0x4ae07eba3462c5d5(p0, p1) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x57C242543B7B8FB9)  
+---This native does not have an official description.
+---@param p0 any
+---@param p1 any
+function N_0x57c242543b7b8fb9(p0, p1) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x614D0B4533F842D3)  
+---This native does not have an official description.
+---@param p0 any
+---@return any
+function N_0x614d0b4533f842d3(p0) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x6579860A5558524A)  
+---This native does not have an official description.
+---@param p0 any
+---@param p1 any
+function N_0x6579860a5558524a(p0, p1) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x7D4411D6736CD295)  
+---This native does not have an official description.
+---@param p0 any
+---@param p1 any
+---@return any
+function N_0x7d4411d6736cd295(p0, p1) end
+
+---**`OBJECT` `client`**  
+---[Native Documentation](https://rdr3natives.com/?_0x7F458B543006C8FE)  
+---something to do with doors lockdown when navmesh is swapping? UPDATE_WORLD_STATE, seems to be for locking something
+---@param doorHash integer | string
+---@param p1 integer
+function N_0x7f458b543006c8fe(doorHash, p1) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x9A74A9CADFA8A598)  
+---This native does not have an official description.
+---@param p0 any
+function N_0x9a74a9cadfa8a598(p0) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xACD4F9831DFAD7F5)  
+---This native does not have an official description.
+---@param p0 any
+---@return any
+function N_0xacd4f9831dfad7f5(p0) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xCBFBD38F2E0A263B)  
+---This native does not have an official description.
+---@param p0 any
+---@param p1 any
+function N_0xcbfbd38f2e0a263b(p0, p1) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xCEAB54F4632C6EF6)  
+---This native does not have an official description.
+---@param p0 any
+---@param p1 any
+function N_0xceab54f4632c6ef6(p0, p1) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xD91E55B6C005EB09)  
+---This native does not have an official description.
+---@param p0 any
+---@param p1 any
+---@return any
+function N_0xd91e55b6c005eb09(p0, p1) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xDE116ECFFDD4B997)  
+---This native does not have an official description.
+---@param p0 any
+---@param p1 any
+function N_0xde116ecffdd4b997(p0, p1) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xDFA1237F5228263F)  
+---This native does not have an official description.
+---@param p0 any
+---@param p1 any
+function N_0xdfa1237f5228263f(p0, p1) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xF65EDE5D02A7A760)  
+---This native does not have an official description.
+---@param p0 any
+---@param p1 any
+function N_0xf65ede5d02a7a760(p0, p1) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xF6E88489B4E6EBE5)  
+---This native does not have an official description.
+---@param p0 any
+---@param p1 any
+function N_0xf6e88489b4e6ebe5(p0, p1) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xFA99E8E575F2FEF8)  
+---This native does not have an official description.
+---@param p0 any
+---@return any
+function N_0xfa99e8e575f2fef8(p0) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xADBE4809F19F927A)  
+---Old name: _MARK_OBJECT_FOR_DELETION
+---@param object integer
+function OnlyCleanUpObjectWhenOutOfRange(object) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x58A850EAEE20FAA3)  
+---This native does not have an official description.
+---@param object integer
+---@param p1 boolean
+---@return boolean
+function PlaceObjectOnGroundProperly(object, p1) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x92AEFB5F6E294023)  
+---This native does not have an official description.
+---@param object integer
+---@param p1 boolean
+---@param p2 boolean
+function PreventCollectionOfPortablePickup(object, p1, p2) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x27F9D613092159CF)  
+---This native does not have an official description.
+---@param pickupHash integer | string
+function RemoveAllPickupsOfType(pickupHash) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x464D8E1427156FE4)  
+---This native does not have an official description.
+---@param doorHash integer | string
+function RemoveDoorFromSystem(doorHash) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x3288D8ACAECD2AB2)  
+---This native does not have an official description.
+---@param pickup integer
+function RemovePickup(pickup) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xF40AB58D83C35027)  
+---This native does not have an official description.
+---@param object integer
+function ResetObjectVelocity(object) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x406137F8EF90EAF5)  
+---This native does not have an official description.
+---@param object integer
+---@param toggle boolean
+function SetActivateObjectPhysicsAsSoonAsItIsUnfrozen(object, toggle) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xAC9AE68F0A463752)  
+---This native does not have an official description.
+---@param lifetime integer
+function SetAmbientPickupLifetime(lifetime) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x98D2D9C053A1F449)  
+---Sets object as auto-jumpable by horse.
+---@param object integer
+---@param p1 boolean
+function SetAutoJumpableByHorse(object, p1) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xE124889AE0521FCF)  
+---This native does not have an official description.
+---@param object integer
+---@param txdHash integer | string
+---@param p2 any
+---@param p3 any
+function SetCustomTexturesOnObject(object, txdHash, p2, p3) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xC07B91B996C1DE89)  
+---Enables the kick prompt for a door
+---@param doorHash integer | string
+---@param enable boolean
+function SetDoorEnableKickPrompt(doorHash, enable) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xA93F925F1942E434)  
+---Changes the interaction behavior for a locked door.
+---Normally, when interacting with a locked door, the character tries the handle. When this native is enabled, that behavior is replaced with a knocking/tapping interaction for the specified door.
+---With toggle enabled:
+---- pressing the interact button on a locked door makes the character knock/tap on the door instead of trying the handle
+---- this does not unlock the door
+---- if the door is in a breakable/force-open state, it may still be opened by physically forcing it (e.g. sprinting into it), but normal interaction still uses the knocking behavior
+---@param doorHash integer | string
+---@param enable boolean
+function SetDoorKnockingWhenLocked(doorHash, enable) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xF538081986E49E9D)  
+---This native does not have an official description.
+---@param x number
+---@param y number
+---@param z number
+---@param p3 number
+function SetForceObjectThisFrame(x, y, z, p3) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xF49574E2332A8F06)  
+---This native does not have an official description.
+---@param object integer
+---@param lightIntensity number
+function SetLightIntensityForObject(object, lightIntensity) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x04D1D4E411CE52D0)  
+---This native does not have an official description.
+---@param object integer
+---@param disable boolean
+function SetLightScatteringDisabledForObject(object, disable) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x63E39F09310F481F)  
+---Params: value = 0.0 - 586.67 (?)
+---@param object integer
+---@param value number
+function SetLightTranslucencyForObject(object, value) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x78857FC65CADB909)  
+---This native does not have an official description.
+---@param toggle boolean
+function SetLocalPlayerCanCollectPortablePickups(toggle) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x88EAEC617CD26926)  
+---Maximum amount of pickup models that can be disallowed is 10.
+---
+---Old name: _SET_LOCAL_PLAYER_CAN_USE_PICKUPS_WITH_THIS_MODEL
+---@param modelHash integer | string
+---@param toggle boolean
+function SetLocalPlayerPermittedToCollectPickupsWithModel(modelHash, toggle) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x0BF3B3BD47D79C08)  
+---This native does not have an official description.
+---@param modelHash integer | string
+---@param p1 integer
+function SetMaxNumPortablePickupsCarriedByPlayer(modelHash, p1) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x94F3D956BFAEAE18)  
+---Params: p2 controls whether to make pickups usable/collectable or not in networked games
+---@param player integer
+---@param pickupHash integer | string
+---@param isUsable boolean
+function SetNetworkPickupUsableForPlayer(player, pickupHash, isUsable) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xE1C708BA4885796B)  
+---Sets object as not jumpable by horse.
+---@param object integer
+---@param p1 boolean
+function SetNotJumpableByHorse(object, p1) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x4D89D607CB3DD1D2)  
+---This native does not have an official description.
+---@param object integer
+---@param toggle boolean
+function SetObjectAllowLowLodBuoyancy(object, toggle) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xFFB99FFD17F65889)  
+---This native does not have an official description.
+---@param object integer
+---@param scale number
+function SetObjectBreakScale(object, scale) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xC8E21C1677DC5E6F)  
+---This native does not have an official description.
+---@param object integer
+---@param intensity number
+function SetObjectBurnIntensity(object, intensity) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x2797C633DCDBBAC5)  
+---Seems to mostly have effect on wood-made objects https://imgur.com/a/32oQvOn
+---@param object integer
+---@param burnLevel number
+---@param affectAsh boolean
+function SetObjectBurnLevel(object, burnLevel, affectAsh) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x7D7285EFEAB5AF15)  
+---This native does not have an official description.
+---@param object integer
+---@param opacity number
+function SetObjectBurnOpacity(object, opacity) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x646564A3B7DF68F8)  
+---p2 is usually the same as speed parameter
+---@param object integer
+---@param speed number
+---@param p2 number
+function SetObjectBurnSpeed(object, speed, p2) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xE157A8A336C7F04A)  
+---Sets if the object can be tagged while using Dead Eye
+---@param object integer
+---@param canBeTagged boolean
+function SetObjectCanBeTagged(object, canBeTagged) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xCAAF2BCCFEF37F77)  
+---This native does not have an official description.
+---@param object integer
+---@param presetFlags integer
+function SetObjectInteractionPreset(object, presetFlags) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xB7017DA4D498269F)  
+---This native does not have an official description.
+---@param object integer
+---@param kickable boolean
+function SetObjectKickable(object, kickable) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x7FCD49388BC9B775)  
+---Primarily used on lantern weapon entities after they have been dropped.
+---This native does NOT affect lanterns while they are being held by a ped
+---@param object integer
+---@param disable boolean
+function SetObjectLanternDisableLight(object, disable) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xF6DF6E90DE7DF90F)  
+---Adjust the physics parameters of a prop, or otherwise known as "object". This is useful for simulated gravity.
+---
+---Other parameters seem to be unknown.
+---
+---p2: seems to be weight and gravity related. Higher value makes the obj fall faster. Very sensitive?
+---p3: seems similar to p2
+---p4: makes obj fall slower the higher the value
+---p5: similar to p4
+---@param object integer
+---@param weight number
+---@param p2 number
+---@param p3 number
+---@param p4 number
+---@param p5 number
+---@param gravity number
+---@param p7 number
+---@param p8 number
+---@param p9 number
+---@param p10 number
+---@param buoyancy number
+function SetObjectPhysicsParams(object, weight, p2, p3, p4, p5, gravity, p7, p8, p9, p10, buoyancy) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xAEE6C800E124CFE1)  
+---Not official native name
+---@param object integer
+---@param name string
+function SetObjectPromptName(object, name) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xD503D6F0986D58BC)  
+---Not official native name
+---@param object integer
+---@param gxtEntryHash integer | string
+function SetObjectPromptNameFromGxtEntry(object, gxtEntryHash) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xEB6F1A9B5510A5D2)  
+---This native does not have an official description.
+---@param object integer
+---@param enabled boolean
+function SetObjectTakesDamageFromCollidingWithBuildings(object, enabled) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x8A7391690F5AFD81)  
+---This native does not have an official description.
+---@param object integer
+---@param targettable boolean
+function SetObjectTargettable(object, targettable) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x581EDBE56E8D62C9)  
+---This native does not have an official description.
+---@param object integer
+---@param targettable boolean
+function SetObjectTargettable_2(object, targettable) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xA22712E8471AA08E)  
+---focus on objects like focus on peds, p1 is to enable/disable p2 is to enable/disable focus when you have a weapon out
+---@param object integer
+---@param toggle boolean
+---@param weaponLock boolean
+function SetObjectTargettableFocus(object, toggle, weaponLock) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x971DA0055324D033)  
+---Alt name: _SET_OBJECT_TINT
+---
+---Old name: _SET_OBJECT_TEXTURE_VARIATION
+---@param object integer
+---@param textureVariation integer
+function SetObjectTintIndex(object, textureVariation) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x00EE08603EADEE92)  
+---This native does not have an official description.
+---@param object integer
+function SetPickupCollectableOnMount(object) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x634C19521485AB25)  
+---This native does not have an official description.
+---@param pickupObject integer
+function SetPickupDoNotAutoPlaceOnGround(pickupObject) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x318516E02DE3ECE2)  
+---This native does not have an official description.
+---@param multiplier number
+function SetPickupGenerationRangeMultiplier(multiplier) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x81218CE01B672219)  
+---This native does not have an official description.
+---@param p0 any
+---@param p1 any
+function SetPickupHiddenWhenUncollectable(p0, p1) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x92E87F60F21A0C3A)  
+---This native does not have an official description.
+---@param p0 any
+---@param p1 any
+function SetPickupNotLootable(p0, p1) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x1607C7D9B3021DF5)  
+---This native does not have an official description.
+---@param p0 any
+---@param p1 any
+function SetPickupParticleFxHighlight(p0, p1) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xEB9740A38FD6D634)  
+---This native does not have an official description.
+---@param p0 any
+---@param p1 any
+function SetPickupParticleFxSpawn(p0, p1) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x78015C9B4B3ECC9D)  
+---This native does not have an official description.
+---@param pickup integer
+---@param duration integer
+function SetPickupRegenerationTime(pickup, duration) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x4A8CB328CD6F1C9B)  
+---This native does not have an official description.
+---@param p0 any
+---@param p1 any
+function SetPickupUncollectable(p0, p1) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x5C29F698D404C5E1)  
+---This native does not have an official description.
+---@param object integer
+---@param state integer
+function SetStateOfRayfireMapObject(object, state) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x53E0DF1A2A3CF0CA)  
+---This native does not have an official description.
+---@param object integer
+---@param p1 any
+---@param p2 boolean
+function SetTeamPickupObject(object, p1, p2) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x2FDFF4107B8C1147)  
+---This native does not have an official description.
+---@param object integer
+---@param toX number
+---@param toY number
+---@param toZ number
+---@param speedX number
+---@param speedY number
+---@param speedZ number
+---@param collision boolean
+---@return boolean
+function SlideObject(object, toX, toY, toZ, speedX, speedY, speedZ, collision) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xF92099527DB8E2A7)  
+---This native does not have an official description.
+---@param rewardType integer
+---@param suppress boolean
+function SuppressPickupRewardType(rewardType, suppress) end
+
+---**`OBJECT` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xB252BC036B525623)  
+---This native does not have an official description.
+---@param object integer
+function TrackObjectVisibility(object) end
+

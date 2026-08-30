@@ -1,0 +1,313 @@
+---@meta
+
+---**`PAD` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xCB0360EFEFB2580D)  
+---nullsub, doesn't do anything
+---@param control integer
+function ClearControlLightEffect(control) end
+
+---**`PAD` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xA0CEFCEA390AAB9B)  
+---Old name: _CLEAR_SUPPRESSED_PAD_RUMBLE
+---@param control integer
+function ClearControlShakeSuppressedId(control) end
+
+---**`PAD` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x5F4B6931816E599B)  
+---This native does not have an official description.
+---@param control integer
+function DisableAllControlActions(control) end
+
+---**`PAD` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xFE99B66D079CF6BC)  
+---This native does not have an official description.
+---@param control integer
+---@param action integer | string
+---@param disableRelatedActions boolean
+function DisableControlAction(control, action, disableRelatedActions) end
+
+---**`PAD` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x351220255D64C155)  
+---This native does not have an official description.
+---@param control integer
+---@param action integer | string
+---@param enableRelatedActions boolean
+function EnableControlAction(control, action, enableRelatedActions) end
+
+---**`PAD` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xD7D22F5592AED8BA)  
+---Returns time in ms since last input.
+---@param control integer
+---@return integer
+function GetControlHowLongAgo(control) end
+
+---**`PAD` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xEC3C9B8D5327B563)  
+---This native does not have an official description.
+---@param control integer
+---@param action integer | string
+---@return number
+function GetControlNormal(control, action) end
+
+---**`PAD` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x5B84D09CEC5209C5)  
+---This native does not have an official description.
+---@param control integer
+---@param action integer | string
+---@return number
+function GetControlUnboundNormal(control, action) end
+
+---**`PAD` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xD95E79E8686D2C27)  
+---This native does not have an official description.
+---@param control integer
+---@param action integer | string
+---@return integer
+function GetControlValue(control, action) end
+
+---**`PAD` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xDDCEB0F26C89C00F)  
+---Gets the current control context. See: _SET_CONTROL_CONTEXT
+---@param control integer
+---@return integer
+function GetCurrentControlContext(control) end
+
+---**`PAD` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x771DFCB24D19C2F6)  
+---This native does not have an official description.
+---@param control integer
+---@return integer
+function GetDisabledControlHowLongAgo(control) end
+
+---**`PAD` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x11E65974A982637C)  
+---This native does not have an official description.
+---@param control integer
+---@param action integer | string
+---@return number
+function GetDisabledControlNormal(control, action) end
+
+---**`PAD` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x4F8A26A890FD62FB)  
+---This native does not have an official description.
+---@param control integer
+---@param action integer | string
+---@return number
+function GetDisabledControlUnboundNormal(control, action) end
+
+---**`PAD` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x6CD79468A1E595C6)  
+---This native does not have an official description.
+---@param control integer
+---@return boolean
+function HaveControlsChanged(control) end
+
+---**`PAD` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xBC0884BC590951C7)  
+---This native does not have an official description.
+---@param action integer | string
+---@param control integer
+---@return boolean
+function IsControlActionValid(action, control) end
+
+---**`PAD` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x1CEA6BFDF248E5D9)  
+---This native does not have an official description.
+---@param control integer
+---@param action integer | string
+---@return boolean
+function IsControlEnabled(control, action) end
+
+---**`PAD` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x580417101DDB492F)  
+---This native does not have an official description.
+---@param control integer
+---@param action integer | string
+---@return boolean
+function IsControlJustPressed(control, action) end
+
+---**`PAD` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x50F940259D3841E6)  
+---This native does not have an official description.
+---@param control integer
+---@param action integer | string
+---@return boolean
+function IsControlJustReleased(control, action) end
+
+---**`PAD` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xF3A21BCD95725A4A)  
+---This native does not have an official description.
+---@param control integer
+---@param action integer | string
+---@return boolean
+function IsControlPressed(control, action) end
+
+---**`PAD` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x648EE3E7F38877DD)  
+---This native does not have an official description.
+---@param control integer
+---@param action integer | string
+---@return boolean
+function IsControlReleased(control, action) end
+
+---**`PAD` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x91AEF906BCA88877)  
+---This native does not have an official description.
+---@param control integer
+---@param action integer | string
+---@return boolean
+function IsDisabledControlJustPressed(control, action) end
+
+---**`PAD` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x305C8DCD79DA8B0F)  
+---This native does not have an official description.
+---@param control integer
+---@param action integer | string
+---@return boolean
+function IsDisabledControlJustReleased(control, action) end
+
+---**`PAD` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xE2587F8CBBD87B1D)  
+---This native does not have an official description.
+---@param control integer
+---@param action integer | string
+---@return boolean
+function IsDisabledControlPressed(control, action) end
+
+---**`PAD` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x77B612531280010D)  
+---This native does not have an official description.
+---@return boolean
+function IsLookInverted() end
+
+---**`PAD` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xA571D46727E2B718)  
+---padIndex is not used
+---
+---Old name: _IS_USING_KEYBOARD
+---@param control integer
+---@return boolean
+function IsUsingKeyboardAndMouse(control) end
+
+---**`PAD` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x1252C029FC8EBB4D)  
+---_IS_R* - _IS_S*
+---@return boolean
+function N_0x1252c029fc8ebb4d() end
+
+---**`PAD` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x43F35DDB2905D945)  
+---This native does not have an official description.
+---@param p0 any
+---@param p1 any
+---@return any
+function N_0x43f35ddb2905d945(p0, p1) end
+
+---**`PAD` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x52C68E92D6E23ADD)  
+---This native does not have an official description.
+---@param p0 any
+function N_0x52c68e92d6e23add(p0) end
+
+---**`PAD` `client`**  
+---[Native Documentation](https://rdr3natives.com/?_0x5F217BC1190503D8)  
+---rumbleCurve: common_0/data/rumblecurves.meta
+---@param rumbleCurve string
+---@param p1 number
+function N_0x5f217bc1190503d8(rumbleCurve, p1) end
+
+---**`PAD` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x709BA8C08C5C008D)  
+---This native does not have an official description.
+function N_0x709ba8c08c5c008d() end
+
+---**`PAD` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xBD629C1C4F501C80)  
+---This native does not have an official description.
+---@param p0 any
+---@return any
+function N_0xbd629c1c4f501c80(p0) end
+
+---**`PAD` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x2804658EB7D8A50B)  
+---Sets the current control context. Must be called every frame.
+---
+---context: https://alloc8or.re/rdr3/doc/misc/input_contexts.txt
+---For more information, see common:/data/control/settings.meta
+---https://github.com/femga/rdr3_discoveries/tree/master/Controls
+---@param control integer
+---@param context integer | string
+function SetControlContext(control, context) end
+
+---**`PAD` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x8290252FFF36ACB5)  
+---nullsub, doesn't do anything
+---
+---Old name: _SET_CONTROL_GROUP_COLOR
+---@param control integer
+---@param red integer
+---@param green integer
+---@param blue integer
+function SetControlLightEffectColor(control, red, green, blue) end
+
+---**`PAD` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xA45884DB10EC7EE3)  
+---nullsub, doesn't do anything
+---@param control integer
+---@param red integer
+---@param green integer
+---@param blue integer
+function SetControlLightEffectFlashingColor(control, red, green, blue) end
+
+---**`PAD` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x48B3886C1358D0D5)  
+---Old name: SET_PAD_SHAKE
+---@param control integer
+---@param duration integer
+---@param frequency integer
+function SetControlShake(control, duration, frequency) end
+
+---**`PAD` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xF239400E16C23E08)  
+---Old name: SET_PAD_SHAKE_SUPPRESSED_ID
+---@param control integer
+---@param uniqueId integer
+function SetControlShakeSuppressedId(control, uniqueId) end
+
+---**`PAD` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x14D29BB12D47F68C)  
+---nullsub, doesn't do anything
+---@param control integer
+---@param leftDuration integer
+---@param leftFrequency integer
+---@param rightDuration integer
+---@param rightFrequency integer
+function SetControlTriggerShake(control, leftDuration, leftFrequency, rightDuration, rightFrequency) end
+
+---**`PAD` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xE8A25867FBA3B05E)  
+---This is for simulating player input.
+---value is a float value from 0 - 1
+---
+---control: see IS_CONTROL_ENABLED
+---
+---Old name: _SET_CONTROL_NORMAL
+---@param control integer
+---@param action integer | string
+---@param value number
+---@return boolean
+function SetControlValueNextFrame(control, action, value) end
+
+---**`PAD` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0xEDE476E5EE29EDB1)  
+---This native does not have an official description.
+---@param control integer
+---@param action integer | string
+function SetInputExclusive(control, action) end
+
+---**`PAD` ``**  
+---[Native Documentation](https://rdr3natives.com/?_0x38C16A305E8CDC8D)  
+---Old name: STOP_PAD_SHAKE
+---@param control integer
+function StopControlShake(control) end
+

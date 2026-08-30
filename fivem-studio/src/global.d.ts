@@ -716,7 +716,9 @@ declare global {
               ok: true;
               mode: "balanced" | "full";
               workspaceRoot: string;
-              libraryRoot: string;
+              libraryRoots: string[];
+              pluginPath: string;
+              target: CfxTarget;
               version: string;
             }
           | { ok: false; mode: "off" | "balanced" | "full"; error: string }
