@@ -6,12 +6,17 @@ import test from "node:test";
 
 import { invalidateConsoleSourceIndex, resolveConsoleSourceLocation } from "./consoleSourceResolver";
 
+function canonical(value: string): string {
+  return fs.realpathSync(value);
+}
+
 function workspace(t: test.TestContext) {
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), "qb-studio-console-source-"));
   const resources = path.join(profile, "resources");
   fs.mkdirSync(resources);
+  const canonicalResources = canonical(resources);
   t.after(() => {
-    invalidateConsoleSourceIndex(resources);
+    invalidateConsoleSourceIndex(canonicalResources);
     fs.rmSync(profile, { recursive: true, force: true });
   });
   const addResource = (group: string, name: string, files: Record<string, string>) => {
@@ -38,7 +43,7 @@ test("resolves case-insensitive resources nested below category folders", async 
     line: 42,
     column: 7,
   }), {
-    path: path.join(resource, "server", "main.lua"),
+    path: canonical(path.join(resource, "server", "main.lua")),
     line: 42,
     column: 7,
   });
@@ -53,12 +58,12 @@ test("resolves real loading-error and source-map relative paths inside a resourc
   const loading = await resolveConsoleSourceLocation(profile, resources, {
     kind: "relative", source: "yarn_builder.js", resourceName: "yarn", line: 81, column: 1,
   });
-  assert.equal(loading.path, path.join(resource, "yarn_builder.js"));
+  assert.equal(loading.path, canonical(path.join(resource, "yarn_builder.js")));
 
   const sourceMap = await resolveConsoleSourceLocation(profile, resources, {
     kind: "relative", source: "../server/index.ts", resourceName: "yarn", line: 3, column: 1,
   });
-  assert.equal(sourceMap.path, path.join(resource, "server", "index.ts"));
+  assert.equal(sourceMap.path, canonical(path.join(resource, "server", "index.ts")));
 });
 
 test("preserves a spaced nested resource path when a basename candidate also exists", async (t) => {
@@ -72,7 +77,7 @@ test("preserves a spaced nested resource path when a basename candidate also exi
     kind: "resource", resourceName: "demo", source: "server/my file.js", line: 12, column: 3,
   });
   assert.deepEqual(location, {
-    path: path.join(resource, "server", "my file.js"),
+    path: canonical(path.join(resource, "server", "my file.js")),
     line: 12,
     column: 3,
   });
@@ -88,7 +93,7 @@ test("returns canonical on-disk casing for Windows source paths", async (t) => {
   const location = await resolveConsoleSourceLocation(profile, resources, {
     kind: "resource", resourceName: "demo", source: "server/main.lua", line: 1, column: 1,
   });
-  assert.equal(location.path, path.join(resource, "Server", "Main.lua"));
+  assert.equal(location.path, canonical(path.join(resource, "Server", "Main.lua")));
 });
 
 test("resolves only contained profile-relative and absolute files", async (t) => {
@@ -99,10 +104,10 @@ test("resolves only contained profile-relative and absolute files", async (t) =>
 
   assert.equal((await resolveConsoleSourceLocation(profile, resources, {
     kind: "profile", source: "server.cfg", line: 2, column: 1,
-  })).path, config);
+  })).path, canonical(config));
   assert.equal((await resolveConsoleSourceLocation(profile, resources, {
     kind: "absolute", source: path.join(resource, "server", "Main File.cs"), line: 12, column: 4,
-  })).path, path.join(resource, "server", "Main File.cs"));
+  })).path, canonical(path.join(resource, "server", "Main File.cs")));
 
   const outside = path.join(path.dirname(profile), `${path.basename(profile)}-outside.lua`);
   fs.writeFileSync(outside, "return false", "utf8");
@@ -152,7 +157,7 @@ test("indexes only through Cfx bracket categories and invalidates cached ambigui
 
   assert.equal((await resolveConsoleSourceLocation(profile, resources, {
     kind: "resource", source: "server.lua", resourceName: "cached", line: 1, column: 1,
-  })).path, path.join(first, "server.lua"));
+  })).path, canonical(path.join(first, "server.lua")));
   await assert.rejects(resolveConsoleSourceLocation(profile, resources, {
     kind: "resource", source: "server.lua", resourceName: "nested", line: 1, column: 1,
   }), /not found/i);
@@ -162,7 +167,7 @@ test("indexes only through Cfx bracket categories and invalidates cached ambigui
   const manifestlessDuplicate = path.join(resources, "[two]", "cached");
   fs.mkdirSync(manifestlessDuplicate, { recursive: true });
   fs.writeFileSync(path.join(manifestlessDuplicate, "server.lua"), "return true", "utf8");
-  invalidateConsoleSourceIndex(resources);
+  invalidateConsoleSourceIndex(canonical(resources));
   await assert.rejects(resolveConsoleSourceLocation(profile, resources, {
     kind: "resource", source: "server.lua", resourceName: "cached", line: 1, column: 1,
   }), /ambiguous/i);
@@ -185,7 +190,7 @@ test("rejects NTFS alternate data streams without rejecting an absolute drive pa
 
   assert.equal((await resolveConsoleSourceLocation(profile, resources, {
     kind: "absolute", source: config, line: 1, column: 1,
-  })).path, config);
+  })).path, canonical(config));
 });
 
 test("rejects source files reached through a linked path", async (t) => {
