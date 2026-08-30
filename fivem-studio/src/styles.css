@@ -561,6 +561,24 @@ button.editor-tab {
 }
 
 /* --- Resource tree --- */
+.resource-tree-root {
+  min-height: 100%;
+  outline: none;
+}
+.resource-tree-root:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.tree-item {
+  outline: none;
+}
+.tree-item:focus-visible > .tree-node {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+.resource-tree-root-node {
+  color: var(--text-1);
+  font-weight: 600;
+}
 .tree-node {
   display: flex;
   align-items: center;
@@ -668,6 +686,112 @@ button.tree-node {
   color: var(--text-dim);
   cursor: default;
   opacity: 0.6;
+}
+
+.modal.resource-create-modal {
+  width: min(640px, calc(100vw - 32px));
+  overflow-x: hidden;
+}
+.resource-create-form {
+  display: grid;
+  gap: 12px;
+}
+.resource-create-target {
+  margin: 0;
+  padding: 8px 10px;
+  overflow-wrap: anywhere;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg-0);
+  color: var(--text-1);
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.45;
+}
+.resource-create-field {
+  display: grid;
+  gap: 5px;
+}
+.resource-create-field label {
+  color: var(--text-1);
+  font-size: 12px;
+  font-weight: 600;
+}
+.resource-create-field input {
+  margin: 0;
+}
+.resource-create-field input[aria-invalid="true"] {
+  border-color: var(--error);
+}
+.resource-template-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.resource-template-options legend {
+  grid-column: 1 / -1;
+  margin-bottom: 1px;
+  color: var(--text-1);
+  font-size: 12px;
+  font-weight: 600;
+}
+.resource-template-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg-1);
+  cursor: pointer;
+}
+.resource-template-option:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-wash);
+}
+.resource-create-modal .resource-template-option input {
+  width: auto;
+  margin: 2px 0 0;
+  flex: 0 0 auto;
+}
+.resource-template-option span {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+.resource-template-option strong {
+  color: var(--text);
+  font-size: 11px;
+}
+.resource-template-option small {
+  color: var(--text-dim);
+  font-size: 10px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.resource-create-error {
+  margin: 0;
+  padding: 7px 9px;
+  border: 1px solid var(--error-border);
+  border-radius: 5px;
+  background: var(--error-wash);
+  color: var(--error);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.resource-create-form .modal-actions {
+  margin-top: 2px;
+}
+
+@media (max-width: 620px) {
+  .resource-template-options {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* --- Editor ---
@@ -907,6 +1031,23 @@ button.tree-node {
   overflow: auto;
   padding: 12px;
 }
+.manifest-validation-errors {
+  margin-bottom: 12px;
+  padding: 9px 11px;
+  border: 1px solid var(--error-border);
+  border-radius: 6px;
+  background: var(--error-wash);
+  color: var(--error);
+  font-size: 11px;
+  line-height: 1.45;
+}
+.manifest-validation-errors ul {
+  margin: 5px 0 0;
+  padding-left: 18px;
+}
+.manifest-form [aria-invalid="true"] {
+  border-color: var(--error);
+}
 .manifest-form-section {
   margin-bottom: 16px;
   padding: 12px;
@@ -920,6 +1061,18 @@ button.tree-node {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+}
+.manifest-section-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.manifest-section-heading h3 {
+  margin: 0;
+}
+.manifest-section-heading .btn {
+  margin-left: auto;
 }
 .manifest-scalar-grid,
 .manifest-list-grid {
@@ -943,6 +1096,51 @@ button.tree-node {
   resize: vertical;
   font-family: var(--mono);
   line-height: 1.45;
+}
+.manifest-check-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 8px 12px;
+  margin: 10px 0 0;
+  padding: 0;
+  border: 0;
+}
+.manifest-check-grid legend {
+  margin-bottom: 7px;
+  color: var(--text-2);
+  font-family: var(--mono);
+  font-size: 10px;
+}
+.manifest-form label.manifest-check-option {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 7px;
+  min-height: 24px;
+}
+.manifest-check-option input {
+  width: auto;
+  margin: 0;
+}
+.manifest-data-files {
+  display: grid;
+  gap: 8px;
+}
+.manifest-data-file {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.7fr) minmax(220px, 1.3fr) auto;
+  align-items: end;
+  gap: 8px;
+}
+.manifest-empty-help {
+  margin: 8px 0 0;
+  color: var(--text-2);
+  font-size: 11px;
+  line-height: 1.45;
+}
+.manifest-form-section > .manifest-form-error {
+  padding: 8px 0 0;
+  font-size: 11px;
 }
 .manifest-form-error {
   padding: 12px;
@@ -1441,6 +1639,19 @@ button.tree-node {
   color: var(--warn);
   font-size: 11px;
 }
+.agent-prompt-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--warn-border);
+  background: var(--warn-wash);
+  color: var(--warn);
+  font-size: 11px;
+}
+.agent-prompt-notice .banner-dismiss {
+  margin-left: auto;
+}
 .chat-working {
   color: var(--text-dim);
   font-size: 12px;
@@ -1679,7 +1890,34 @@ button.tree-node {
   white-space: pre-wrap;
   word-break: break-word;
 }
-
+.console-source-link {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  text-align: inherit;
+  text-decoration: underline;
+  text-decoration-thickness: from-font;
+  text-underline-offset: 2px;
+}
+.console-source-link:hover {
+  color: var(--accent-hover);
+}
+.console-source-link:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 2px;
+}
+.console-source-error {
+  margin: 0;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--error-border);
+  background: var(--error-wash);
+  line-height: 1.4;
+}
 .console-refresh-control {
   display: flex;
   align-items: center;

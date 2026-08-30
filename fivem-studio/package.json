@@ -15,11 +15,12 @@
     "build:runtime": "npm run bundle -w @qbcore-framework/qb-studio-runtime",
     "build:vite": "vite build",
     "build:electron": "tsc -p electron/tsconfig.json",
+    "verify:resource-templates": "node ../scripts/verify-resource-templates.mjs",
     "prepare:luals": "node ../scripts/prepare-luals.mjs",
-    "prebuild": "npm run build:runtime",
+    "prebuild": "npm run verify:resource-templates && npm run build:runtime",
     "build": "npm run build:vite && npm run build:electron",
     "typecheck": "tsc --noEmit && tsc -p electron/tsconfig.json --noEmit",
-    "pretest": "npm run build:electron && node -e \"require('electron')\"",
+    "pretest": "npm run verify:resource-templates && npm run build:electron && node -e \"require('electron')\"",
     "test": "node --test \"dist-electron/**/*.test.js\"",
     "start": "electron .",
     "predist": "npm run prepare:luals && npm run build",
@@ -93,6 +94,10 @@
       {
         "from": "resources/lua-library",
         "to": "lua-library"
+      },
+      {
+        "from": "resources/resource-templates",
+        "to": "resource-templates"
       }
     ],
     "win": {

@@ -36,5 +36,7 @@ test("resolveInsideRoot refuses a new file below a link ancestor", (t) => {
 
 test("assertSafeBasename rejects path components and Windows-invalid names", () => {
   assert.equal(assertSafeBasename("resource-name"), "resource-name");
-  for (const value of ["", ".", "..", "a/b", "a\\b", "a:bad"]) assert.throws(() => assertSafeBasename(value));
+  for (const value of ["", ".", "..", "a/b", "a\\b", "a:bad", "trailing.", "CON", "nul.txt", "CLOCK$", "LPT9.lua"]) {
+    assert.throws(() => assertSafeBasename(value));
+  }
 });

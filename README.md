@@ -14,11 +14,11 @@ screenshots.
 
 - Monaco code editor with persistent per-file undo history, SQL/XML support, configurable editor preferences, Problems view, and safe change review before approved agent writes
 - QBCore, FiveM, and RedM Lua intelligence powered by a bundled, verified Lua language server
-- txData workspace browser and minimal local-workspace creator
+- txData workspace browser with direct file/folder creation and Lua, static NUI, React, and Vue starter resources
 - Separate one-click launchers and paths for FiveM Legacy, FiveM Enhanced, and RedM
 - Bounded Auto detection for all three client launchers and server artifacts, with Browse for custom locations
 - Recommended/Latest server-artifact updates with staging and rollback backup
-- Read-only console with foreground-only configurable auto-refresh, synchronized non-destructive Clear view, and approved resource refresh controls for coding loops
+- Read-only console with clickable source locations and scoped Agent Fix handoff, foreground-only configurable auto-refresh, synchronized non-destructive Clear view, and approved resource refresh controls for coding loops
 - Opt-in, privacy-limited Discord Rich Presence that can be enabled in Settings
 - Built-in themes plus validated user JSON theme packs with instant Settings preview
 - GitHub repository and organization search with resource imports
@@ -141,6 +141,32 @@ selected workspace exactly and that txAdmin has started the server at least
 once. The Console toolbar can refresh every 1, 2, 5, 10, or 30 seconds (2
 seconds by default), or remain manual. Automatic polling pauses while another
 QB Studio tab is selected or the app is in the background.
+
+Use the Resources tree context menu to create an empty file, an empty folder,
+or a starter resource. The Lua starter contains `fxmanifest.lua`, `config.lua`,
+`client.lua`, and `server.lua`. Static NUI adds a ready-to-run local HTML/CSS/JS
+interface; React and Vue add editable, version-locked Vite source plus checked-in
+local `dist` output, so the resource works before Node or a development server is
+installed. Creation never runs package scripts or downloads dependencies. It is
+limited to the selected workspace's Resources folder, never overwrites an
+existing entry, and rejects unsafe or reserved names. Starter resources can be
+created at the Resources root or in a category folder, but not inside another
+resource.
+
+The `fxmanifest.lua` form covers current game API sets, scripts, NUI and
+loadscreen pages, packfiles, dependencies, exports, data files, supported
+runtime options, and resource flags. Custom, structured, and deprecated
+metadata remains byte-preserved and editable in Raw mode.
+
+Recognized source locations in console output are links. Selecting one opens a
+workspace file in the editor at the reported line and column; resource-relative
+locations resolve against that resource. Paths that are outside the selected
+workspace, ambiguous, missing, or otherwise unsafe remain unopened and produce
+an in-app error instead. Right-click a linked diagnostic (or use the keyboard
+context-menu key) and choose **Agent fix** to send a bounded, credential-redacted
+resources-relative diagnostic to the assistant and start a fix turn. Console
+text is explicitly treated as untrusted data, and any resulting write still
+uses the normal review and approval flow.
 
 ## Editor intelligence and resource use
 

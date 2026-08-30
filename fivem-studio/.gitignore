@@ -1,5 +1,7 @@
 node_modules/
 dist/
+!resources/resource-templates/*/html/dist/
+!resources/resource-templates/*/html/dist/**
 dist-electron/
 release/
 *.log

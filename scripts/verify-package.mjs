@@ -9,6 +9,8 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { extractFile, listPackage } from "@electron/asar";
 
+import { verifyResourceTemplates } from "./verify-resource-templates.mjs";
+
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const releaseDir = path.join(root, "release");
 const desktopPackage = JSON.parse(fs.readFileSync(path.join(root, "fivem-studio", "package.json"), "utf8"));
@@ -174,6 +176,11 @@ const luaLibrary = path.join(releaseDir, "win-unpacked", "resources", "lua-libra
 if (!fs.existsSync(luaLibrary) || fs.statSync(luaLibrary).size < 1_000) {
   throw new Error("The packaged QBCore/Cfx Lua definitions are missing or incomplete.");
 }
+const packagedTemplateCatalog = path.join(releaseDir, "win-unpacked", "resources", "resource-templates");
+const packagedTemplates = verifyResourceTemplates(packagedTemplateCatalog);
+if (packagedTemplates.templateCount !== 3 || packagedTemplates.fileCount < 20) {
+  throw new Error("The packaged starter-resource catalog is incomplete.");
+}
 
 const packagedExe = path.join(releaseDir, "win-unpacked", "QB Studio.exe");
 if (!fs.existsSync(packagedExe)) throw new Error("The unpacked QB Studio executable is missing.");
@@ -204,6 +211,13 @@ function verifyPackagedRenderer() {
     "dist/manifest.json",
     "dist-electron/main.js",
     "dist-electron/preload.js",
+    "dist-electron/agentPromptDecision.js",
+    "dist-electron/consoleAgentFix.js",
+    "dist-electron/consoleSourceParser.js",
+    "dist-electron/consoleSourceResolver.js",
+    "dist-electron/manifestModel.js",
+    "dist-electron/resourceCreation.js",
+    "dist-electron/resourceTemplates.js",
     "dist-electron/workspaceSearchWorker.js",
     "node_modules/electron-updater/out/main.js",
   ];
@@ -369,4 +383,4 @@ async function verifyRuntimeContract() {
 verifyPackagedRenderer();
 await verifyRuntimeContract();
 
-console.log(`Verified ${installer}, update metadata, packaged renderer assets, and loopback runtime identity contract v3.`);
+console.log(`Verified ${installer}, update metadata, packaged renderer assets, resource templates, and loopback runtime identity contract v3.`);

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Group, Panel, Separator } from "react-resizable-panels";
 import type { FileChangeReview, OpenFile } from "../App";
 import { languageForPath } from "../editorLanguage";
@@ -7,6 +7,8 @@ import { t } from "../i18n";
 import type { LuaServiceStatus } from "../luaLanguageService";
 import { countNewConsoleLines, filterConsoleOutput, newestErrorBlock, type ConsoleSeverity } from "../consoleText";
 import { appendConsoleSnapshot } from "../../electron/consoleViewModel";
+import { parseConsoleSourceLocations, type ConsoleSourceLocationRequest } from "../../electron/consoleSourceParser";
+import ContextMenu from "./ContextMenu";
 
 export type CenterTab = "viewport" | "console" | "resources" | "editor";
 
@@ -166,6 +168,13 @@ export default function CenterPane({
       setSplitPath(null);
     }
   }, [activePath, openFiles, splitPath]);
+
+  useEffect(() => {
+    if (!editorReveal || editorReveal.path.split(/[/\\]/).pop()?.toLowerCase() !== "fxmanifest.lua") return;
+    setRawManifestPaths((current) => current.has(editorReveal.path)
+      ? current
+      : new Set(current).add(editorReveal.path));
+  }, [editorReveal]);
 
   const renderCodeEditor = (file: OpenFile, revealLocation: CenterPaneProps["editorReveal"] = null) => (
     <CodeEditor
@@ -490,6 +499,115 @@ const CONSOLE_REFRESH_OPTIONS = [
   { value: 30_000, label: "Every 30 seconds" },
 ] as const;
 
+function LinkedConsoleOutput({
+  output,
+  onOpen,
+  onAgentFix,
+}: {
+  output: string;
+  onOpen: (location: ConsoleSourceLocationRequest) => void;
+  onAgentFix: (location: ConsoleSourceLocationRequest, diagnosticLine: string) => void;
+}) {
+  const [menu, setMenu] = useState<{
+    x: number;
+    y: number;
+    location: ConsoleSourceLocationRequest;
+    diagnosticLine: string;
+    accessiblePath: string;
+  } | null>(null);
+  const lines = output.split("\n");
+  const linkedLines = lines.map((line, lineIndex) => {
+    const locations = parseConsoleSourceLocations(line);
+    const content: ReactNode[] = [];
+    let offset = 0;
+    for (const location of locations) {
+      if (location.start > offset) content.push(line.slice(offset, location.start));
+      const request: ConsoleSourceLocationRequest = {
+        kind: location.kind,
+        source: location.source,
+        ...(location.resourceName ? { resourceName: location.resourceName } : {}),
+        line: location.line,
+        column: location.column,
+      };
+      const accessiblePath = location.resourceName
+        ? `@${location.resourceName}/${location.source}`
+        : location.source;
+      content.push(
+        <button
+          className="console-source-link"
+          type="button"
+          key={`${location.start}:${location.end}`}
+          title={t("console.openSource", { path: accessiblePath, line: location.line, column: location.column })}
+          aria-label={t("console.openSource", { path: accessiblePath, line: location.line, column: location.column })}
+          aria-haspopup="menu"
+          onClick={() => {
+            setMenu(null);
+            onOpen(request);
+          }}
+          onContextMenu={(event) => {
+            event.preventDefault();
+            const bounds = event.currentTarget.getBoundingClientRect();
+            const openedFromKeyboard = event.clientX === 0 && event.clientY === 0;
+            setMenu({
+              x: openedFromKeyboard ? bounds.left + 4 : event.clientX,
+              y: openedFromKeyboard ? bounds.bottom + 2 : event.clientY,
+              location: request,
+              diagnosticLine: line,
+              accessiblePath,
+            });
+          }}
+          onKeyDown={(event) => {
+            if (event.key !== "ContextMenu" && !(event.shiftKey && event.key === "F10")) return;
+            event.preventDefault();
+            const bounds = event.currentTarget.getBoundingClientRect();
+            setMenu({
+              x: bounds.left + 4,
+              y: bounds.bottom + 2,
+              location: request,
+              diagnosticLine: line,
+              accessiblePath,
+            });
+          }}
+        >
+          {line.slice(location.start, location.end)}
+        </button>,
+      );
+      offset = location.end;
+    }
+    if (offset < line.length) content.push(line.slice(offset));
+    return (
+      <Fragment key={lineIndex}>
+        {content}
+        {lineIndex < lines.length - 1 ? "\n" : null}
+      </Fragment>
+    );
+  });
+
+  return (
+    <>
+      {linkedLines}
+      {menu && (
+        <ContextMenu
+          x={menu.x}
+          y={menu.y}
+          ariaLabel={t("console.sourceMenu", { path: menu.accessiblePath })}
+          onClose={() => setMenu(null)}
+          items={[
+            {
+              label: t("console.sourceMenu.open"),
+              onClick: () => onOpen(menu.location),
+            },
+            {
+              label: t("console.sourceMenu.agentFix"),
+              onClick: () => onAgentFix(menu.location, menu.diagnosticLine),
+            },
+          ]}
+        />
+      )}
+    </>
+  );
+}
+
 function ConsoleSection({
   active,
   connected,
@@ -568,6 +686,7 @@ export function ConsolePanel({
   const [error, setError] = useState<string | null>(null);
   const [pageVisible, setPageVisible] = useState(() => document.visibilityState !== "hidden");
   const [refreshNotice, setRefreshNotice] = useState<string | null>(null);
+  const [sourceError, setSourceError] = useState<string | null>(null);
   const [viewCleared, setViewCleared] = useState(false);
   const requestRef = useRef<Promise<void> | null>(null);
   const outputRef = useRef<HTMLDivElement>(null);
@@ -611,6 +730,7 @@ export function ConsolePanel({
     setOutput("");
     setViewCleared(true);
     setBufferedLines(0);
+    setSourceError(null);
     stickToBottomRef.current = true;
   }, []);
 
@@ -720,6 +840,24 @@ export function ConsolePanel({
       setCopyNotice((copyError as Error).message);
     }
   }
+
+  const openSourceLocation = useCallback(async (location: ConsoleSourceLocationRequest) => {
+    setSourceError(null);
+    try {
+      await window.api.console.openSourceLocation(location);
+    } catch (openError) {
+      setSourceError(t("console.openSourceError", { message: (openError as Error).message }));
+    }
+  }, []);
+
+  const requestAgentFix = useCallback(async (location: ConsoleSourceLocationRequest, diagnosticLine: string) => {
+    setSourceError(null);
+    try {
+      await window.api.console.requestAgentFix(location, diagnosticLine);
+    } catch (requestError) {
+      setSourceError(t("console.agentFixError", { message: (requestError as Error).message }));
+    }
+  }, []);
 
   const visibleOutput = useMemo(
     () => filterConsoleOutput(output, severity, textFilter),
@@ -832,21 +970,30 @@ export function ConsolePanel({
         </div>
       )}
       {error && <div className="error-text" style={{ padding: "0 8px" }}>{error}</div>}
+      {sourceError && <div className="error-text console-source-error" role="alert">{sourceError}</div>}
       <div
         ref={outputRef}
         className="console-lines"
         style={{ flex: 1, overflow: "auto" }}
         aria-live={refreshIntervalMs === 0 ? "polite" : "off"}
       >
-        {visibleOutput || (output
-          ? `(${t("console.noMatches")})`
-          : viewCleared
-            ? `(${t("console.viewCleared")})`
-          : available === false
-            ? "(console not attached yet)"
-            : refreshIntervalMs === 0
-              ? "(no output yet — click Refresh)"
-              : "(waiting for console output…)" )}
+        {visibleOutput
+          ? (
+              <LinkedConsoleOutput
+                output={visibleOutput}
+                onOpen={(location) => void openSourceLocation(location)}
+                onAgentFix={(location, diagnosticLine) => void requestAgentFix(location, diagnosticLine)}
+              />
+            )
+          : (output
+              ? `(${t("console.noMatches")})`
+              : viewCleared
+                ? `(${t("console.viewCleared")})`
+              : available === false
+                ? "(console not attached yet)"
+                : refreshIntervalMs === 0
+                  ? "(no output yet — click Refresh)"
+                  : "(waiting for console output…)" )}
       </div>
     </div>
   );

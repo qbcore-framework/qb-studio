@@ -89,5 +89,10 @@ export function assertSafeBasename(name: string): string {
     throw new Error("New name must be a single valid filename.");
   }
   if (/[<>:"/\\|?*\u0000-\u001f]/.test(trimmed)) throw new Error("New name contains invalid path characters.");
+  if (/[. ]$/.test(trimmed)) throw new Error("New name cannot end with a dot or space on Windows.");
+  const windowsStem = trimmed.split(".", 1)[0].toUpperCase();
+  if (/^(?:CON|PRN|AUX|NUL|CLOCK\$|COM[1-9]|LPT[1-9])$/.test(windowsStem)) {
+    throw new Error("New name is reserved by Windows.");
+  }
   return trimmed;
 }

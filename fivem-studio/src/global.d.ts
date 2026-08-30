@@ -169,6 +169,36 @@ export interface ResourceImportResult {
   skippedDirectories: string[];
 }
 
+export interface CreatedResourceEntry {
+  name: string;
+  path: string;
+  isDirectory: boolean;
+}
+
+export interface StarterResourceResult {
+  name: string;
+  rootPath: string;
+  manifestPath: string;
+  files: string[];
+  fileCount: number;
+  game: "gta5" | "rdr3";
+  template: "lua" | "static-nui" | "react-nui" | "vue-nui";
+}
+
+export interface ConsoleSourceLocationRequest {
+  kind: "resource" | "relative" | "profile" | "absolute";
+  source: string;
+  resourceName?: string;
+  line: number;
+  column: number;
+}
+
+export interface ResolvedConsoleSourceLocation {
+  path: string;
+  line: number;
+  column: number;
+}
+
 export interface EditorBookmark {
   path: string;
   line: number;
@@ -495,11 +525,15 @@ declare global {
       };
       console: {
         openPopout(): Promise<void>;
+        openSourceLocation(location: ConsoleSourceLocationRequest): Promise<ResolvedConsoleSourceLocation>;
+        requestAgentFix(location: ConsoleSourceLocationRequest, diagnosticLine: string): Promise<void>;
         clearView(): Promise<number>;
         clearGeneration(): Promise<number>;
         setRefreshInterval(intervalMs: number): Promise<number>;
         onRefreshIntervalChanged(callback: (intervalMs: number) => void): () => void;
         onClearViewChanged(callback: (generation: number) => void): () => void;
+        onRevealSourceLocation(callback: (location: ResolvedConsoleSourceLocation) => void): () => void;
+        onAgentFixPrompt(callback: (prompt: string, workspaceScope: string) => void): () => void;
       };
       theme: {
         system(): Promise<"dark" | "light">;
@@ -581,6 +615,9 @@ declare global {
         dependencyGraph(): Promise<ResourceDependencyGraph>;
         compare(leftRoot: string, rightRoot: string): Promise<ResourceComparison>;
         duplicate(sourceRoot: string, newName: string): Promise<ResourceDuplicateResult>;
+        createFile(parentPath: string, name: string): Promise<CreatedResourceEntry>;
+        createDirectory(parentPath: string, name: string): Promise<CreatedResourceEntry>;
+        createStarter(parentPath: string, name: string, template: "lua" | "static-nui" | "react-nui" | "vue-nui"): Promise<StarterResourceResult>;
         importDroppedFolder(file: File): Promise<ResourceImportResult>;
       };
       bookmarks: {

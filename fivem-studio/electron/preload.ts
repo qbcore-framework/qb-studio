@@ -15,6 +15,9 @@ const api = {
   },
   console: {
     openPopout: () => ipcRenderer.invoke("console:openPopout"),
+    openSourceLocation: (location: unknown) => ipcRenderer.invoke("console:openSourceLocation", location),
+    requestAgentFix: (location: unknown, diagnosticLine: string) =>
+      ipcRenderer.invoke("console:requestAgentFix", location, diagnosticLine),
     clearView: () => ipcRenderer.invoke("console:clearView"),
     clearGeneration: () => ipcRenderer.invoke("console:clearGeneration"),
     setRefreshInterval: (intervalMs: number) => ipcRenderer.invoke("console:setRefreshInterval", intervalMs),
@@ -27,6 +30,16 @@ const api = {
       const listener = (_e: unknown, generation: number) => callback(generation);
       ipcRenderer.on("console:clearViewChanged", listener);
       return () => ipcRenderer.removeListener("console:clearViewChanged", listener);
+    },
+    onRevealSourceLocation: (callback: (location: { path: string; line: number; column: number }) => void) => {
+      const listener = (_e: unknown, location: { path: string; line: number; column: number }) => callback(location);
+      ipcRenderer.on("console:revealSourceLocation", listener);
+      return () => ipcRenderer.removeListener("console:revealSourceLocation", listener);
+    },
+    onAgentFixPrompt: (callback: (prompt: string, workspaceScope: string) => void) => {
+      const listener = (_e: unknown, prompt: string, workspaceScope: string) => callback(prompt, workspaceScope);
+      ipcRenderer.on("console:agentFixPrompt", listener);
+      return () => ipcRenderer.removeListener("console:agentFixPrompt", listener);
     },
   },
   theme: {
@@ -122,6 +135,10 @@ const api = {
     dependencyGraph: () => ipcRenderer.invoke("resources:dependencyGraph"),
     compare: (leftRoot: string, rightRoot: string) => ipcRenderer.invoke("resources:compare", leftRoot, rightRoot),
     duplicate: (sourceRoot: string, newName: string) => ipcRenderer.invoke("resources:duplicate", sourceRoot, newName),
+    createFile: (parentPath: string, name: string) => ipcRenderer.invoke("resources:createFile", parentPath, name),
+    createDirectory: (parentPath: string, name: string) => ipcRenderer.invoke("resources:createDirectory", parentPath, name),
+    createStarter: (parentPath: string, name: string, template: "lua" | "static-nui" | "react-nui" | "vue-nui") =>
+      ipcRenderer.invoke("resources:createStarter", parentPath, name, template),
     importDroppedFolder: (file: File) => {
       const sourceRoot = webUtils.getPathForFile(file);
       if (!sourceRoot) return Promise.reject(new Error("Drop a real folder from Windows Explorer."));

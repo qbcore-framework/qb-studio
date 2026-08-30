@@ -8,6 +8,14 @@ import type { OpenFile } from "../App";
 import type { EditorPreferences, EditorProblem, ResolvedTheme } from "../global";
 import { t } from "../i18n";
 
+function revealEditorPosition(editor: monaco.editor.IStandaloneCodeEditor, line: number, column: number): void {
+  requestAnimationFrame(() => {
+    editor.setPosition({ lineNumber: line, column });
+    editor.revealPositionInCenter({ lineNumber: line, column });
+    editor.focus();
+  });
+}
+
 interface CodeEditorProps {
   file: OpenFile;
   openPaths: string[];
@@ -220,12 +228,7 @@ export default function CodeEditor({
 
   useEffect(() => {
     if (!reveal || reveal.path !== file.path || !editorRef.current) return;
-    const editor = editorRef.current;
-    requestAnimationFrame(() => {
-      editor.setPosition({ lineNumber: reveal.line, column: reveal.column });
-      editor.revealPositionInCenter({ lineNumber: reveal.line, column: reveal.column });
-      editor.focus();
-    });
+    revealEditorPosition(editorRef.current, reveal.line, reveal.column);
   }, [file.path, reveal]);
 
   useEffect(() => {
@@ -250,6 +253,7 @@ export default function CodeEditor({
       onChange={handleChange}
       onMount={(editor, monaco) => {
         editorRef.current = editor;
+        if (reveal?.path === file.path) revealEditorPosition(editor, reveal.line, reveal.column);
         bookmarkDecorationsRef.current = editor.createDecorationsCollection(bookmarkLines.map((line) => ({
           range: new monaco.Range(line, 1, line, 1),
           options: { isWholeLine: true, glyphMarginClassName: "editor-bookmark-glyph" },

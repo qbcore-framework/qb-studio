@@ -77,6 +77,11 @@ import { duplicateResource } from "./resourceDuplicate";
 import { importResourceFolder } from "./resourceImport";
 import { DiscordPresence } from "./discordPresence";
 import { ThemePackStore, customThemeId, themeBaseForPreference } from "./themePacks";
+import { invalidateConsoleSourceIndex, resolveConsoleSourceLocation } from "./consoleSourceResolver";
+import { agentPromptWorkspaceScope } from "./agentPromptDecision";
+import { createResourceDirectory, createResourceFile, createStarterResource } from "./resourceCreation";
+import { requireStarterResourceTemplate } from "./resourceTemplates";
+import { prepareConsoleAgentFix } from "./consoleAgentFix";
 
 let mainWindow: BrowserWindow | null = null;
 let consoleWindow: BrowserWindow | null = null;
@@ -129,6 +134,21 @@ function requireMainWindowSender(event: IpcMainInvokeEvent): void {
   if (!mainWindow || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents) {
     throw new Error("Application updates are available only from the main QB Studio window.");
   }
+}
+
+function requireStudioWindowSender(event: IpcMainInvokeEvent): void {
+  const allowed = [mainWindow, consoleWindow].some((window) =>
+    window && !window.isDestroyed() && event.sender === window.webContents,
+  );
+  if (!allowed) throw new Error("Console actions are available only from a QB Studio window.");
+}
+
+function clearConsoleViews(): number {
+  consoleClearGeneration += 1;
+  for (const window of [mainWindow, consoleWindow]) {
+    if (window && !window.isDestroyed()) window.webContents.send("console:clearViewChanged", consoleClearGeneration);
+  }
+  return consoleClearGeneration;
 }
 
 function requireAppUpdateController(): AppUpdateController {
@@ -217,6 +237,12 @@ function activeResourcesRoot(): string {
   return resources;
 }
 
+function starterTemplateCatalogRoot(): string {
+  return app.isPackaged
+    ? path.join(process.resourcesPath, "resource-templates")
+    : path.join(app.getAppPath(), "resources", "resource-templates");
+}
+
 function scopedProfilePath(value: unknown): string {
   const root = activeProfileRoot();
   const requested = requireString(value, "Path");
@@ -233,7 +259,7 @@ function listProfileDirectory(value: unknown) {
     return entries;
   }
   return entries.map((entry) => {
-    if (!entry.isDirectory || !contains(resourcesRoot, entry.path)) return entry;
+    if (!entry.isDirectory || !contains(resourcesRoot, entry.path) || /^\[[^\[\]\\/]+\]$/.test(entry.name)) return entry;
     const context = resourceAtDirectory(resourcesRoot, entry.path);
     return context ? { ...entry, resourceName: context.name } : entry;
   });
@@ -615,12 +641,39 @@ function registerIpcHandlers() {
   // --- config ---
   ipcMain.handle("config:get", () => loadConfig());
   ipcMain.handle("console:openPopout", () => openConsoleWindow());
-  ipcMain.handle("console:clearView", () => {
-    consoleClearGeneration += 1;
-    for (const window of [mainWindow, consoleWindow]) {
-      if (window && !window.isDestroyed()) window.webContents.send("console:clearViewChanged", consoleClearGeneration);
+  ipcMain.handle("console:clearView", () => clearConsoleViews());
+  ipcMain.handle("console:openSourceLocation", async (event, request: unknown) => {
+    requireStudioWindowSender(event);
+    const profileRoot = activeProfileRoot();
+    const resourcesRoot = activeResourcesRoot();
+    const location = await resolveConsoleSourceLocation(profileRoot, resourcesRoot, request);
+    if (path.relative(activeProfileRoot(), profileRoot) !== "") {
+      throw new Error("The selected workspace changed while resolving that console source.");
     }
-    return consoleClearGeneration;
+    if (!mainWindow || mainWindow.isDestroyed()) throw new Error("The main QB Studio window is unavailable.");
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+    mainWindow.webContents.send("console:revealSourceLocation", location);
+    return location;
+  });
+  ipcMain.handle("console:requestAgentFix", async (event, request: unknown, diagnosticLine: unknown) => {
+    requireStudioWindowSender(event);
+    const promptConfig = loadConfig();
+    const workspaceScope = agentPromptWorkspaceScope(promptConfig.txDataPath, promptConfig.selectedProfile);
+    const profileRoot = activeProfileRoot();
+    const resourcesRoot = activeResourcesRoot();
+    const prepared = await prepareConsoleAgentFix(profileRoot, resourcesRoot, request, diagnosticLine);
+    const currentConfig = loadConfig();
+    if (path.relative(activeProfileRoot(), profileRoot) !== "" ||
+        agentPromptWorkspaceScope(currentConfig.txDataPath, currentConfig.selectedProfile) !== workspaceScope) {
+      throw new Error("The selected workspace changed while preparing that console diagnostic.");
+    }
+    if (!mainWindow || mainWindow.isDestroyed()) throw new Error("The main QB Studio window is unavailable.");
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+    mainWindow.webContents.send("console:agentFixPrompt", prepared.prompt, workspaceScope);
   });
   ipcMain.handle("console:clearGeneration", () => consoleClearGeneration);
   ipcMain.handle("console:setRefreshInterval", (_e, value: unknown) =>
@@ -660,6 +713,8 @@ function registerIpcHandlers() {
       // hidden renderer draft cannot overwrite it.
       const saved = saveConfig({ ...candidate, consoleRefreshIntervalMs: previous.consoleRefreshIntervalMs });
       if (switchingProfile) {
+        invalidateConsoleSourceIndex();
+        clearConsoleViews();
         agent.resetConversation();
         await mcpDisconnect();
         stopManagedRuntime();
@@ -713,6 +768,8 @@ function registerIpcHandlers() {
     if (dirtyFileCount > 0 && allowDiscard !== true) throw new Error("Save or explicitly discard open editor changes before switching workspaces.");
     const id = requireString(idValue, "Recent workspace id", 24);
     const recent = resolveRecentWorkspace(recentWorkspacesPath(), id);
+    invalidateConsoleSourceIndex();
+    clearConsoleViews();
     agent.resetConversation();
     await mcpDisconnect();
     stopManagedRuntime();
@@ -866,13 +923,18 @@ function registerIpcHandlers() {
   );
   ipcMain.handle("fs:rename", (_e, oldPath: unknown, newName: unknown) => {
     const oldTarget = scopedProfilePath(oldPath);
+    const resourcesRoot = activeResourcesRoot();
     const name = assertSafeBasename(requireString(newName, "New name", 255));
     const newTarget = resolveInsideRoot(path.dirname(oldTarget), name);
     // Parent remains in the active profile root; resolve again to catch links.
     resolveInsideRoot(activeProfileRoot(), path.relative(activeProfileRoot(), newTarget));
     const rollbackBookmarks = bookmarkStore?.remapPathWithRollback(activeProfileRoot(), oldTarget, newTarget);
     try {
-      return renamePath(oldTarget, name);
+      const renamed = renamePath(oldTarget, name);
+      if (contains(resourcesRoot, oldTarget) || contains(resourcesRoot, renamed)) {
+        invalidateConsoleSourceIndex(resourcesRoot);
+      }
+      return renamed;
     } catch (error) {
       try { rollbackBookmarks?.(); } catch (rollbackError) {
         throw new Error(`Rename failed and bookmark rollback also failed: ${(error as Error).message}; ${(rollbackError as Error).message}`);
@@ -882,9 +944,11 @@ function registerIpcHandlers() {
   });
   ipcMain.handle("fs:delete", async (_e, targetPath: unknown) => {
     const target = scopedProfilePath(targetPath);
+    const resourcesRoot = activeResourcesRoot();
     const rollbackBookmarks = bookmarkStore?.removePathWithRollback(activeProfileRoot(), target);
     try {
       await shell.trashItem(target);
+      if (contains(resourcesRoot, target)) invalidateConsoleSourceIndex(resourcesRoot);
     } catch (error) {
       try { rollbackBookmarks?.(); } catch (rollbackError) {
         throw new Error(`Delete failed and bookmark rollback also failed: ${(error as Error).message}; ${(rollbackError as Error).message}`);
@@ -998,15 +1062,50 @@ function registerIpcHandlers() {
     requireString(leftRoot, "Left resource path"),
     requireString(rightRoot, "Right resource path"),
   ));
-  ipcMain.handle("resources:duplicate", (_e, sourceRoot: unknown, newName: unknown) => duplicateResource(
+  ipcMain.handle("resources:duplicate", (_e, sourceRoot: unknown, newName: unknown) => {
+    const resourcesRoot = activeResourcesRoot();
+    const result = duplicateResource(
+      resourcesRoot,
+      requireString(sourceRoot, "Source resource path"),
+      requireString(newName, "New resource name", 255),
+    );
+    invalidateConsoleSourceIndex(resourcesRoot);
+    return result;
+  });
+  ipcMain.handle("resources:createFile", (_e, parentPath: unknown, name: unknown) => createResourceFile(
     activeResourcesRoot(),
-    requireString(sourceRoot, "Source resource path"),
-    requireString(newName, "New resource name", 255),
+    requireString(parentPath, "Parent folder"),
+    requireString(name, "New file name", 255),
   ));
-  ipcMain.handle("resources:importFolder", (_e, sourceRoot: unknown) => importResourceFolder(
-    activeResourcesRoot(),
-    requireString(sourceRoot, "Dropped resource folder"),
-  ));
+  ipcMain.handle("resources:createDirectory", (_e, parentPath: unknown, name: unknown) => {
+    const resourcesRoot = activeResourcesRoot();
+    const result = createResourceDirectory(
+      resourcesRoot,
+      requireString(parentPath, "Parent folder"),
+      requireString(name, "New folder name", 255),
+    );
+    invalidateConsoleSourceIndex(resourcesRoot);
+    return result;
+  });
+  ipcMain.handle("resources:createStarter", (_e, parentPath: unknown, name: unknown, templateValue: unknown) => {
+    const resourcesRoot = activeResourcesRoot();
+    const result = createStarterResource(
+      resourcesRoot,
+      requireString(parentPath, "Parent folder"),
+      requireString(name, "New resource name", 255),
+      loadConfig().activeCfxTarget === "redm" ? "rdr3" : "gta5",
+      requireStarterResourceTemplate(templateValue),
+      starterTemplateCatalogRoot(),
+    );
+    invalidateConsoleSourceIndex(resourcesRoot);
+    return result;
+  });
+  ipcMain.handle("resources:importFolder", (_e, sourceRoot: unknown) => {
+    const resourcesRoot = activeResourcesRoot();
+    const result = importResourceFolder(resourcesRoot, requireString(sourceRoot, "Dropped resource folder"));
+    invalidateConsoleSourceIndex(resourcesRoot);
+    return result;
+  });
   ipcMain.handle("bookmarks:list", () => bookmarkStore?.list(activeProfileRoot()) ?? []);
   ipcMain.handle("bookmarks:toggle", (_e, filePath: unknown, line: unknown) => {
     if (!bookmarkStore) throw new Error("Bookmarks are not ready yet.");
@@ -1023,9 +1122,12 @@ function registerIpcHandlers() {
   ipcMain.handle("github:listOrgRepos", (_e, input: unknown) =>
     listGithubOrganizationRepos(requireString(input, "GitHub organization", 128)),
   );
-  ipcMain.handle("github:cloneRepo", (_e, repoUrl: unknown, _projectRoot: unknown) =>
-    cloneRepo(requireString(repoUrl, "GitHub repository", 2048), activeResourcesRoot()),
-  );
+  ipcMain.handle("github:cloneRepo", async (_e, repoUrl: unknown, _projectRoot: unknown) => {
+    const resourcesRoot = activeResourcesRoot();
+    const result = await cloneRepo(requireString(repoUrl, "GitHub repository", 2048), resourcesRoot);
+    invalidateConsoleSourceIndex(resourcesRoot);
+    return result;
+  });
 
   // --- launch the selected FiveM or RedM client, in its own window ---
   ipcMain.handle("cfx:launch", (_e, targetValue: unknown) => {

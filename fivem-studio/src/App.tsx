@@ -15,6 +15,12 @@ import { t } from "./i18n";
 import { lastConsoleLines } from "./consoleText";
 import { activateTheme } from "./theme";
 import { PerPathSaveQueue, reconcileSuccessfulSave } from "../electron/editorSaveReconciliation";
+import {
+  agentPromptWorkspaceScope,
+  consumeAgentPromptEnvelope,
+  type AgentPromptEnvelope,
+  type AgentPromptMode,
+} from "../electron/agentPromptDecision";
 import type {
   AppUpdateState,
   CfxTarget,
@@ -150,8 +156,28 @@ export default function App() {
   const intentionalServerStop = useRef(false);
   const latestConsoleOutput = useRef("");
   const [crashTriage, setCrashTriage] = useState<CrashTriageContext | null>(null);
-  const [agentPrompt, setAgentPrompt] = useState<{ text: string; nonce: number } | null>(null);
+  const currentAgentPromptScope = agentPromptWorkspaceScope(config.txDataPath, config.selectedProfile);
+  const agentPromptScopeRef = useRef(currentAgentPromptScope);
+  agentPromptScopeRef.current = currentAgentPromptScope;
+  const agentPromptSequence = useRef(0);
+  const [agentPrompt, setAgentPrompt] = useState<AgentPromptEnvelope | null>(null);
   const [assistantActive, setAssistantActive] = useState(false);
+
+  const offerAgentPrompt = useCallback((text: string, mode: AgentPromptMode, workspaceScope = agentPromptScopeRef.current) => {
+    setAgentPrompt({
+      id: ++agentPromptSequence.current,
+      text,
+      mode,
+      workspaceScope,
+    });
+  }, []);
+  const consumeAgentPrompt = useCallback((id: number) => {
+    setAgentPrompt((current) => consumeAgentPromptEnvelope(current, id));
+  }, []);
+
+  useEffect(() => {
+    setAgentPrompt((current) => current?.workspaceScope === currentAgentPromptScope ? current : null);
+  }, [currentAgentPromptScope]);
 
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>("resources");
   const [treeRefreshKey, setTreeRefreshKey] = useState(0);
@@ -200,6 +226,7 @@ export default function App() {
   });
   const [editorProblems, setEditorProblems] = useState<Record<string, EditorProblem[]>>({});
   const [editorReveal, setEditorReveal] = useState<{ path: string; line: number; column: number; nonce: number } | null>(null);
+  const openEditorLocationRef = useRef<(path: string, line: number, column: number) => Promise<void>>(async () => undefined);
   const [changeReviews, setChangeReviews] = useState<Record<string, FileChangeReview>>({});
   const [reviewPath, setReviewPath] = useState<string | null>(null);
   const reviewNonce = useRef(0);
@@ -287,6 +314,14 @@ export default function App() {
   useEffect(() => window.api.console.onRefreshIntervalChanged((consoleRefreshIntervalMs) => {
     setConfig((current) => ({ ...current, consoleRefreshIntervalMs }));
   }), []);
+
+  useEffect(() => window.api.console.onRevealSourceLocation((location) => {
+    void openEditorLocationRef.current(location.path, location.line, location.column);
+  }), []);
+
+  useEffect(() => window.api.console.onAgentFixPrompt((prompt, workspaceScope) => {
+    offerAgentPrompt(prompt, "submit", workspaceScope);
+  }), [offerAgentPrompt]);
 
   const reloadThemePacks = useCallback(async () => {
     const packs = await window.api.theme.listPacks();
@@ -956,6 +991,7 @@ export default function App() {
 
   async function openEditorLocation(path: string, line: number, column: number) {
     if (!await openFile(path)) return;
+    setReviewPath((current) => current === path ? null : current);
     setEditorReveal((current) => ({
       path,
       line,
@@ -963,6 +999,7 @@ export default function App() {
       nonce: (current?.nonce ?? 0) + 1,
     }));
   }
+  openEditorLocationRef.current = openEditorLocation;
 
   function revealEditorProblem(problem: EditorProblem) {
     void openEditorLocation(problem.path, problem.line, problem.column);
@@ -1461,6 +1498,22 @@ export default function App() {
                         });
                         void openEditorLocation(result.manifestPath, 1, 1);
                       }}
+                      onEntryCreated={(result) => {
+                        setTreeRefreshKey((key) => key + 1);
+                        setResourceNotice({
+                          message: t(`resource.create.success.${result.isDirectory ? "folder" : "file"}`, { name: result.name }),
+                          error: false,
+                        });
+                        if (!result.isDirectory) void openEditorLocation(result.path, 1, 1);
+                      }}
+                      onStarterCreated={(result) => {
+                        setTreeRefreshKey((key) => key + 1);
+                        setResourceNotice({
+                          message: t("resource.create.success.resource", { name: result.name, count: result.fileCount }),
+                          error: false,
+                        });
+                        void openEditorLocation(result.manifestPath, 1, 1);
+                      }}
                     />
                   </>
                 ) : sidebarTab === "search" ? (
@@ -1516,9 +1569,9 @@ export default function App() {
               consoleRefreshSignal={consoleRefreshSignal}
               crashTriage={crashTriage}
               onDismissCrashTriage={() => setCrashTriage(null)}
-              onSendCrashTriage={(text) => setAgentPrompt({ text, nonce: Date.now() })}
+              onSendCrashTriage={(text) => offerAgentPrompt(text, "draft")}
               onConsoleOutputChange={(output) => { latestConsoleOutput.current = output; }}
-              onAgentPrompt={(text) => setAgentPrompt({ text, nonce: Date.now() })}
+              onAgentPrompt={(text) => offerAgentPrompt(text, "draft")}
               dependencyGraph={dependencyGraph}
               bookmarks={bookmarks}
               onToggleBookmark={(path, line) => void toggleBookmark(path, line)}
@@ -1547,13 +1600,14 @@ export default function App() {
 
           <Panel defaultSize="25" minSize="18">
             <ChatPanel
-              key={`${config.txDataPath ?? ""}|${config.selectedProfile ?? ""}`}
+              key={currentAgentPromptScope}
               connected={connected}
               config={config}
               resolvedTheme={resolvedTheme}
               workspaceMatch={workspaceMatch}
               selection={selection.selectedText ? selection : null}
               suggestedPrompt={agentPrompt}
+              onSuggestedPromptConsumed={consumeAgentPrompt}
               activePath={activePath}
               activeResourceName={activeResourceContext?.name ?? null}
               onActivityChange={setAssistantActive}

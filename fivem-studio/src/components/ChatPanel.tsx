@@ -3,6 +3,13 @@ import { languageForPath } from "../editorLanguage";
 import type { AgentEvent, AgentFilePreview, ResolvedTheme, RuntimeWorkspaceMatch, StudioConfig, TurnUsage } from "../global";
 import { matchPreset } from "../providerPresets";
 import { t } from "../i18n";
+import {
+  agentPromptWorkspaceScope,
+  decideAgentPromptDispatch,
+  isAgentPromptForWorkspace,
+  isUnconsumedAgentPrompt,
+  type AgentPromptEnvelope,
+} from "../../electron/agentPromptDecision";
 
 const ChangeDiff = lazy(() => import("./ChangeDiff"));
 
@@ -95,7 +102,8 @@ interface ChatPanelProps {
   workspaceMatch: RuntimeWorkspaceMatch | null;
   /** Live editor selection, if any — shown as a chip so it's never a surprise what gets sent. */
   selection: { path: string | null; selectedText: string; startLine: number; endLine: number } | null;
-  suggestedPrompt: { text: string; nonce: number } | null;
+  suggestedPrompt: AgentPromptEnvelope | null;
+  onSuggestedPromptConsumed: (id: number) => void;
   activePath: string | null;
   activeResourceName: string | null;
   onActivityChange: (active: boolean) => void;
@@ -108,37 +116,69 @@ export default function ChatPanel({
   workspaceMatch,
   selection,
   suggestedPrompt,
+  onSuggestedPromptConsumed,
   activePath,
   activeResourceName,
   onActivityChange,
 }: ChatPanelProps) {
+  const isAnthropic = config.agentProvider === "anthropic";
+  const preset = matchPreset(config.agentProvider, config.openaiBaseUrl);
+  const readinessScope = JSON.stringify([
+    config.agentProvider,
+    config.openaiBaseUrl,
+    config.openaiModel,
+    preset.needsKey,
+  ]);
+  const workspaceScope = agentPromptWorkspaceScope(config.txDataPath, config.selectedProfile);
   const [entries, setEntries] = useState<Entry[]>([]);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
-  const [ready, setReady] = useState<boolean | null>(null);
+  const [readiness, setReadiness] = useState<{ scope: string; value: boolean | null }>({
+    scope: readinessScope,
+    value: null,
+  });
+  const ready = readiness.scope === readinessScope ? readiness.value : null;
   const [usage, setUsage] = useState<SessionUsage | null>(null);
   const [spendWarningDismissed, setSpendWarningDismissed] = useState(false);
+  const [promptNotice, setPromptNotice] = useState<{ message: string; urgent: boolean } | null>(null);
+  const [turnCompletion, setTurnCompletion] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const followOutputRef = useRef(true);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const sendLockRef = useRef(false);
+  const activeSendIdRef = useRef(0);
+  const sendSequenceRef = useRef(0);
+  const busyRef = useRef(busy);
+  const readyRef = useRef(ready);
+  const consumedPromptIdRef = useRef(0);
 
-  const isAnthropic = config.agentProvider === "anthropic";
-  const preset = matchPreset(config.agentProvider, config.openaiBaseUrl);
+  busyRef.current = busy;
+  readyRef.current = ready;
+
   const backendLabel = isAnthropic ? "Claude" : `${config.openaiModel || "?"} via ${preset.label}`;
 
   // A purely local backend needs no credential, so readiness differs by provider.
   useEffect(() => {
+    let cancelled = false;
+    const applyReady = (value: boolean) => {
+      if (!cancelled) setReadiness({ scope: readinessScope, value });
+    };
     if (isAnthropic) {
-      window.api.agent.hasApiKey().then(setReady);
-      return;
+      setReadiness({ scope: readinessScope, value: null });
+      void window.api.agent.hasApiKey().then(applyReady).catch(() => applyReady(false));
+      return () => { cancelled = true; };
     }
     const configured = Boolean(config.openaiBaseUrl && config.openaiModel);
     if (!configured || !preset.needsKey) {
-      setReady(configured);
-      return;
+      setReadiness({ scope: readinessScope, value: configured });
+      return () => { cancelled = true; };
     }
-    window.api.agent.hasProviderKey(config.openaiBaseUrl).then((has) => setReady(configured && has));
-  }, [isAnthropic, config.openaiBaseUrl, config.openaiModel, preset.needsKey]);
+    setReadiness({ scope: readinessScope, value: null });
+    void window.api.agent.hasProviderKey(config.openaiBaseUrl)
+      .then((has) => applyReady(configured && has))
+      .catch(() => applyReady(false));
+    return () => { cancelled = true; };
+  }, [readinessScope, isAnthropic, config.openaiBaseUrl, config.openaiModel, preset.needsKey]);
 
   useEffect(() => {
     return window.api.agent.onEvent((event: AgentEvent) => {
@@ -148,10 +188,10 @@ export default function ChatPanel({
         setUsage((prev) => accumulate(prev, event.usage));
         return;
       }
+      if (event.type === "done") setTurnCompletion((current) => current + 1);
       const view = scrollRef.current;
       followOutputRef.current = !view || view.scrollHeight - view.scrollTop - view.clientHeight < 48;
       setEntries((prev) => applyEvent(prev, event));
-      if (event.type === "done") setBusy(false);
     });
   }, []);
 
@@ -165,9 +205,64 @@ export default function ChatPanel({
 
   useEffect(() => {
     if (!suggestedPrompt) return;
-    setDraft(suggestedPrompt.text);
-    inputRef.current?.focus();
-  }, [suggestedPrompt]);
+    if (!isUnconsumedAgentPrompt(consumedPromptIdRef.current, suggestedPrompt.id)) return;
+    if (suggestedPrompt.mode === "draft") {
+      if (!isAgentPromptForWorkspace(suggestedPrompt, workspaceScope)) {
+        consumedPromptIdRef.current = suggestedPrompt.id;
+        onSuggestedPromptConsumed(suggestedPrompt.id);
+        setPromptNotice(null);
+        return;
+      }
+      consumedPromptIdRef.current = suggestedPrompt.id;
+      onSuggestedPromptConsumed(suggestedPrompt.id);
+      setDraft(suggestedPrompt.text);
+      inputRef.current?.focus();
+      return;
+    }
+
+    const decision = decideAgentPromptDispatch({
+      prompt: suggestedPrompt,
+      workspaceScope,
+      ready: readyRef.current,
+      busy: busyRef.current,
+      sendLocked: sendLockRef.current,
+    });
+    if (decision === "pending") {
+      setPromptNotice({ message: t("agent.autoSubmit.checking"), urgent: false });
+      return;
+    }
+    if (decision === "workspace-mismatch") {
+      consumedPromptIdRef.current = suggestedPrompt.id;
+      onSuggestedPromptConsumed(suggestedPrompt.id);
+      setPromptNotice(null);
+      return;
+    }
+
+    if (decision === "busy") {
+      consumedPromptIdRef.current = suggestedPrompt.id;
+      onSuggestedPromptConsumed(suggestedPrompt.id);
+      setPromptNotice({ message: t("agent.autoSubmit.busy"), urgent: true });
+      return;
+    }
+    if (decision === "unconfigured") {
+      consumedPromptIdRef.current = suggestedPrompt.id;
+      onSuggestedPromptConsumed(suggestedPrompt.id);
+      setPromptNotice({ message: t("agent.autoSubmit.unconfigured"), urgent: true });
+      return;
+    }
+    if (decision === "empty") {
+      consumedPromptIdRef.current = suggestedPrompt.id;
+      onSuggestedPromptConsumed(suggestedPrompt.id);
+      setPromptNotice({ message: t("agent.autoSubmit.empty"), urgent: true });
+      return;
+    }
+
+    setPromptNotice(null);
+    const accepted = startSend(suggestedPrompt.text, false);
+    consumedPromptIdRef.current = suggestedPrompt.id;
+    onSuggestedPromptConsumed(suggestedPrompt.id);
+    if (!accepted) setPromptNotice({ message: t("agent.autoSubmit.busy"), urgent: true });
+  }, [suggestedPrompt, onSuggestedPromptConsumed, ready, workspaceScope]);
 
   useEffect(() => setSpendWarningDismissed(false), [config.agentSpendWarningUsd]);
 
@@ -240,18 +335,34 @@ export default function ChatPanel({
     }
   }
 
-  async function send() {
-    const text = draft.trim();
-    if (!text || busy) return;
+  function startSend(message: string, clearDraft: boolean): boolean {
+    const text = message.trim();
+    if (!text || busyRef.current || sendLockRef.current) return false;
+    const sendId = ++sendSequenceRef.current;
+    activeSendIdRef.current = sendId;
+    sendLockRef.current = true;
+    busyRef.current = true;
+    setPromptNotice(null);
     setEntries((prev) => [...prev, { kind: "user", text }]);
-    setDraft("");
+    if (clearDraft) setDraft("");
     setBusy(true);
-    try {
-      await window.api.agent.send(text);
-    } catch (err) {
-      setEntries((prev) => [...prev, { kind: "error", text: (err as Error).message || "Could not send the message." }]);
-      setBusy(false);
-    }
+    void Promise.resolve()
+      .then(() => window.api.agent.send(text))
+      .catch((err) => {
+        setEntries((prev) => [...prev, { kind: "error", text: (err as Error).message || "Could not send the message." }]);
+      })
+      .finally(() => {
+        if (activeSendIdRef.current !== sendId) return;
+        activeSendIdRef.current = 0;
+        sendLockRef.current = false;
+        busyRef.current = false;
+        setBusy(false);
+      });
+    return true;
+  }
+
+  function send() {
+    startSend(draft, true);
   }
 
   async function newChat() {
@@ -259,6 +370,7 @@ export default function ChatPanel({
       await window.api.agent.reset();
       setEntries([]);
       setUsage(null);
+      setTurnCompletion(0);
       setSpendWarningDismissed(false);
     } catch (err) {
       setEntries((prev) => [...prev, { kind: "error", text: (err as Error).message || "Could not start a new chat." }]);
@@ -297,10 +409,25 @@ export default function ChatPanel({
           <button type="button" className="banner-dismiss" onClick={() => setSpendWarningDismissed(true)} aria-label={t("common.dismiss")}>×</button>
         </div>
       )}
+      {promptNotice && (
+        <div
+          className="agent-prompt-notice"
+          role={promptNotice.urgent ? "alert" : "status"}
+          aria-live={promptNotice.urgent ? "assertive" : "polite"}
+        >
+          <span>{promptNotice.message}</span>
+          <button type="button" className="banner-dismiss" onClick={() => setPromptNotice(null)} aria-label={t("common.dismiss")}>×</button>
+        </div>
+      )}
 
       <div
         className="chat-messages"
         ref={scrollRef}
+        role="log"
+        aria-label={t("agent.transcript.label")}
+        aria-live="polite"
+        aria-relevant="additions"
+        aria-atomic="false"
         onScroll={(event) => {
           const view = event.currentTarget;
           followOutputRef.current = view.scrollHeight - view.scrollTop - view.clientHeight < 48;
@@ -438,7 +565,7 @@ export default function ChatPanel({
           }
           if (entry.kind === "error") {
             return (
-              <div key={i} className="chat-message error">
+              <div key={i} className="chat-message error" role="alert">
                 {entry.text}
               </div>
             );
@@ -451,12 +578,15 @@ export default function ChatPanel({
         })}
 
         {busy && (
-          <div className="chat-working">
+          <div className="chat-working" role="status" aria-live="polite">
             {entries.some((entry) => entry.kind === "tool" && entry.approvalStatus === "pending")
               ? "Waiting for your approval…"
               : "Working…"}
           </div>
         )}
+      </div>
+      <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        {turnCompletion > 0 && <span key={turnCompletion}>{t("agent.turnFinished")}</span>}
       </div>
 
       {selection && (
@@ -490,7 +620,6 @@ export default function ChatPanel({
             onClick={() => {
               void window.api.agent.cancel().catch((err) => {
                 setEntries((prev) => [...prev, { kind: "error", text: (err as Error).message || "Could not stop the agent." }]);
-                setBusy(false);
               });
             }}
           >

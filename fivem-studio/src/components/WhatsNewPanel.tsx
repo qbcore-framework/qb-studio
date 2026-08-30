@@ -11,9 +11,10 @@ export default function WhatsNewPanel({ currentVersion, onClose }: { currentVers
           <h2 id="whats-new-title" data-dialog-initial-focus tabIndex={-1}>{t("whatsNew.title", { version: currentVersion })}</h2>
           <p>{t("whatsNew.intro")}</p>
           <ul>
-            <li>{t("whatsNew.resourceWorkflow")}</li>
-            <li>{t("whatsNew.safeSearch")}</li>
-            <li>{t("whatsNew.console")}</li>
+            <li>{t("whatsNew.resourceCreation")}</li>
+            <li>{t("whatsNew.creationSafety")}</li>
+            <li>{t("whatsNew.consoleSources")}</li>
+            <li>{t("whatsNew.agentFix")}</li>
           </ul>
           <div className="modal-actions">
             <button type="button" className="btn primary" onClick={onClose}>{t("whatsNew.continue")}</button>
