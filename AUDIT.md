@@ -39,9 +39,14 @@ add player or gameplay controls.
 - Added workspace search/replace with bounded previews and revision checks,
   resource import/duplication staging, console filtering and crash triage, and
   demand-driven Lua language-server integration.
-- Added an NSIS installer, CI, semantic versioning, a single installer release
-  asset, GitHub build and complete-lockfile SBOM attestations, an MIT license,
-  and QB Studio branding.
+- Added an NSIS installer, CI, semantic versioning, coordinated installer,
+  `latest.yml`, and blockmap release assets, GitHub build and complete-lockfile
+  SBOM attestations, an MIT license, and QB Studio branding.
+- Added user-controlled application updates: installed releases check the
+  official GitHub feed at startup, download only after an explicit user action,
+  and install only through **Restart to update**. Unsaved editor changes block
+  that restart, and the current version remains visible in the top bar and
+  **About & updates**.
 - Hardened release qualification with exact Node/npm pins, immutable GitHub
   Action SHAs, complete moderate-threshold dependency auditing, least-privilege
   workflow jobs, cross-platform desktop test discovery, and package-content
@@ -54,10 +59,11 @@ add player or gameplay controls.
 1. Run an end-to-end matrix against a fresh generated workspace: txAdmin
    attachment, FXServer start, console tail, resource list, each lifecycle
    action, reconnect, app restart, and clean uninstall.
-2. Add Authenticode signing and verify the installer/update trust chain before
-   enabling automatic updates.
-3. Add a release smoke test that installs into a clean Windows VM and launches
-   the packaged app, not just the unpacked build.
+2. Add Authenticode signing, place the exact certificate subject in updater
+   `publisherName`, and verify the complete installer/update trust chain.
+3. Add a release smoke test that installs N-1 in a clean Windows VM, updates it
+   to N through **Restart to update**, verifies the displayed and registered
+   version, and tests both the default and a custom per-user install path.
 
 ### P1 — highest-value product improvements
 
@@ -87,8 +93,11 @@ add player or gameplay controls.
 - txAdmin owns its control-profile schema. QB Studio creates a safe
   server-data workspace, then the developer attaches it through txAdmin's
   supported setup/deployer flow.
-- Initial installers are unsigned and will accumulate reputation slowly until
-  code signing is added.
+- Current installers and application updates are unsigned. GitHub HTTPS
+  transport and the SHA-512 digest in `latest.yml` provide integrity within the
+  GitHub release channel, but no independent Windows publisher identity;
+  Authenticode and updater `publisherName` enforcement remain the priority
+  trust upgrade.
 - Semantic-release publishes before the separate least-privilege GitHub
   attestation job can run. A release is not considered attested until that job
   succeeds; publication and attestation are not atomic under the current

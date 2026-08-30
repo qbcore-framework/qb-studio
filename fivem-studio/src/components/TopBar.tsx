@@ -2,6 +2,7 @@ import type { CfxTarget, RecentWorkspaceSummary, RuntimeIdentity, RuntimeWorkspa
 import { t } from "../i18n";
 
 interface TopBarProps {
+  appVersion: string;
   connected: boolean;
   runtimeIdentity: RuntimeIdentity | null;
   workspaceMatch: RuntimeWorkspaceMatch | null;
@@ -26,6 +27,7 @@ interface TopBarProps {
 }
 
 export default function TopBar({
+  appVersion,
   connected,
   runtimeIdentity,
   workspaceMatch,
@@ -80,7 +82,10 @@ export default function TopBar({
         : `Start ${activeLabel} server`;
   return (
     <div className="topbar">
-      <span className="brand">QB Studio</span>
+      <span className="brand">
+        <span>QB Studio</span>
+        <span className="brand-version" title={`QB Studio version ${appVersion}`}>v{appVersion}</span>
+      </span>
       <div className="spacer" />
       <div className="status-pill runtime-status" title={statusTitle}>
         <span className={`status-dot ${runtimeReady ? "connected" : connected ? "limited" : "disconnected"}`} />

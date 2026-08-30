@@ -1,8 +1,9 @@
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { gunzipSync } from "node:zlib";
 
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
@@ -20,9 +21,123 @@ const expectedInstaller = `QB-Studio-Setup-${desktopPackage.version}-x64.exe`;
 if (installer !== expectedInstaller) {
   throw new Error(`Expected installer ${expectedInstaller}, found ${installer}.`);
 }
-if (fs.statSync(path.join(releaseDir, installer)).size < 10 * 1024 * 1024) {
+const installerPath = path.join(releaseDir, installer);
+const installerSize = fs.statSync(installerPath).size;
+if (installerSize < 10 * 1024 * 1024) {
   throw new Error("The installer is unexpectedly small.");
 }
+
+function oneMatch(text, expression, label) {
+  const matches = [...text.matchAll(expression)];
+  if (matches.length !== 1) throw new Error(`The update manifest must contain exactly one ${label}.`);
+  return matches[0][1];
+}
+
+function hashFile(filePath, algorithm, encoding) {
+  const hash = createHash(algorithm);
+  const descriptor = fs.openSync(filePath, "r");
+  const buffer = Buffer.allocUnsafe(1024 * 1024);
+  try {
+    while (true) {
+      const count = fs.readSync(descriptor, buffer, 0, buffer.length, null);
+      if (count === 0) break;
+      hash.update(buffer.subarray(0, count));
+    }
+  } finally {
+    fs.closeSync(descriptor);
+  }
+  return hash.digest(encoding);
+}
+
+function verifyUpdateManifest() {
+  const manifestPath = path.join(releaseDir, "latest.yml");
+  if (!fs.existsSync(manifestPath)) throw new Error("The updater manifest latest.yml is missing.");
+  const manifest = fs.readFileSync(manifestPath, "utf8");
+  if (Buffer.byteLength(manifest, "utf8") > 64 * 1024) throw new Error("The updater manifest is unexpectedly large.");
+
+  const version = oneMatch(manifest, /^version:\s*([^\s#]+)\s*$/gm, "version");
+  const fileUrl = oneMatch(manifest, /^ {2}- url:\s*(\S+)\s*$/gm, "files URL");
+  const fileSha512 = oneMatch(manifest, /^ {4}sha512:\s*([A-Za-z0-9+/=]+)\s*$/gm, "files SHA-512");
+  const fileSizeText = oneMatch(manifest, /^ {4}size:\s*(\d+)\s*$/gm, "files size");
+  const legacyPath = oneMatch(manifest, /^path:\s*(\S+)\s*$/gm, "legacy path");
+  const legacySha512 = oneMatch(manifest, /^sha512:\s*([A-Za-z0-9+/=]+)\s*$/gm, "legacy SHA-512");
+  const fileSize = Number(fileSizeText);
+  const actualSha512 = hashFile(installerPath, "sha512", "base64");
+
+  if (version !== desktopPackage.version) throw new Error(`latest.yml version ${version} does not match ${desktopPackage.version}.`);
+  if (fileUrl !== expectedInstaller || legacyPath !== expectedInstaller) {
+    throw new Error("latest.yml does not point exclusively to the exact versioned installer.");
+  }
+  if (!Number.isSafeInteger(fileSize) || fileSize !== installerSize) {
+    throw new Error("latest.yml installer size does not match the packaged installer.");
+  }
+  if (fileSha512 !== actualSha512 || legacySha512 !== actualSha512) {
+    throw new Error("latest.yml SHA-512 does not match the packaged installer.");
+  }
+}
+
+function verifyInstallerBlockmap() {
+  const blockmapPath = `${installerPath}.blockmap`;
+  const blockmaps = fs.readdirSync(releaseDir).filter((name) => /^QB-Studio-Setup-.*\.exe\.blockmap$/i.test(name));
+  if (blockmaps.length !== 1 || blockmaps[0] !== path.basename(blockmapPath) || !fs.existsSync(blockmapPath)) {
+    throw new Error(`Expected exactly the installer blockmap ${path.basename(blockmapPath)}, found ${blockmaps.join(", ") || "none"}.`);
+  }
+  const compressedSize = fs.statSync(blockmapPath).size;
+  if (compressedSize < 1024 || compressedSize > 16 * 1024 * 1024) {
+    throw new Error("The installer blockmap has an implausible size.");
+  }
+
+  const compressed = fs.readFileSync(blockmapPath);
+  if (compressed[0] !== 0x1f || compressed[1] !== 0x8b) throw new Error("The installer blockmap is not gzip encoded.");
+  let blockmap;
+  try {
+    blockmap = JSON.parse(gunzipSync(compressed, { maxOutputLength: 32 * 1024 * 1024 }).toString("utf8"));
+  } catch (error) {
+    throw new Error(`The installer blockmap is invalid: ${(error instanceof Error ? error.message : String(error))}`);
+  }
+  if (blockmap?.version !== "2" || !Array.isArray(blockmap.files) || blockmap.files.length !== 1) {
+    throw new Error("The installer blockmap must contain exactly one version 2 file map.");
+  }
+  const [file] = blockmap.files;
+  if (
+    file?.name !== "file" ||
+    file.offset !== 0 ||
+    !Array.isArray(file.checksums) ||
+    !Array.isArray(file.sizes) ||
+    file.checksums.length < 2 ||
+    file.checksums.length !== file.sizes.length
+  ) {
+    throw new Error("The installer blockmap does not contain a nontrivial installer chunk map.");
+  }
+  if (!file.checksums.every((checksum) => typeof checksum === "string" && /^[A-Za-z0-9+/]{24}$/.test(checksum) && Buffer.from(checksum, "base64").length === 18)) {
+    throw new Error("The installer blockmap contains an invalid chunk checksum.");
+  }
+  if (!file.sizes.every((size) => Number.isSafeInteger(size) && size > 0)) {
+    throw new Error("The installer blockmap contains an invalid chunk size.");
+  }
+  if (file.sizes.reduce((total, size) => total + size, 0) !== installerSize) {
+    throw new Error("The installer blockmap chunk sizes do not cover the exact installer.");
+  }
+}
+
+function verifyPackagedUpdaterConfig() {
+  const configPath = path.join(releaseDir, "win-unpacked", "resources", "app-update.yml");
+  if (!fs.existsSync(configPath)) throw new Error("The packaged app-update.yml is missing.");
+  const config = fs.readFileSync(configPath, "utf8");
+  const yamlValue = (key) => oneMatch(config, new RegExp(`^${key}:\\s*([^\\s#]+)\\s*$`, "gm"), `app-update.yml ${key}`);
+  if (
+    yamlValue("provider") !== "github" ||
+    yamlValue("owner") !== "qbcore-framework" ||
+    yamlValue("repo") !== "qb-studio" ||
+    yamlValue("updaterCacheDirName") !== "qb-studio-updater"
+  ) {
+    throw new Error("The packaged updater is not pinned to the official QB Studio GitHub repository.");
+  }
+}
+
+verifyUpdateManifest();
+verifyInstallerBlockmap();
+verifyPackagedUpdaterConfig();
 
 const runtime = path.join(releaseDir, "win-unpacked", "resources", "runtime", "runtime.cjs");
 if (!fs.existsSync(runtime) || fs.statSync(runtime).size < 100_000) {
@@ -90,6 +205,7 @@ function verifyPackagedRenderer() {
     "dist-electron/main.js",
     "dist-electron/preload.js",
     "dist-electron/workspaceSearchWorker.js",
+    "node_modules/electron-updater/out/main.js",
   ];
   for (const entry of required) {
     if (!entries.has(entry)) throw new Error(`Required packaged app entry is missing: ${entry}`);
@@ -253,4 +369,4 @@ async function verifyRuntimeContract() {
 verifyPackagedRenderer();
 await verifyRuntimeContract();
 
-console.log(`Verified ${installer}, packaged renderer assets, and loopback runtime identity contract v3.`);
+console.log(`Verified ${installer}, update metadata, packaged renderer assets, and loopback runtime identity contract v3.`);

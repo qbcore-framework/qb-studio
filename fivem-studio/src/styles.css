@@ -245,9 +245,19 @@ textarea:focus {
   -webkit-app-region: no-drag;
 }
 .topbar .brand {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  white-space: nowrap;
   font-weight: 600;
   color: var(--text);
   letter-spacing: 0.2px;
+}
+.brand-version {
+  color: var(--text-dim);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0;
 }
 .topbar .spacer {
   flex: 1;
@@ -290,6 +300,11 @@ textarea:focus {
   }
   .topbar-workspaces {
     width: 128px;
+  }
+  .brand-version {
+    max-width: 76px;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 }
 .status-dot {
@@ -2017,6 +2032,79 @@ button.tree-node {
   border: 1px solid var(--error-border);
   border-radius: 5px;
   background: var(--bg-1);
+}
+.app-update-card {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-2);
+}
+.app-update-card.error {
+  border-color: var(--error-border);
+  background: var(--error-wash);
+}
+.app-update-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.app-update-summary h4 {
+  margin: 0 0 2px;
+  color: var(--text);
+  font-size: 13px;
+}
+.app-update-version,
+.app-update-message,
+.app-update-hint {
+  color: var(--text-dim);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.app-update-card.error .app-update-message {
+  color: var(--red);
+}
+.app-update-action {
+  flex: 0 0 auto;
+}
+.app-update-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.app-update-progress progress {
+  min-width: 0;
+  height: 8px;
+  flex: 1;
+  accent-color: var(--accent);
+}
+.app-update-release-link {
+  justify-self: start;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  text-decoration: underline;
+}
+.app-update-release-link:hover {
+  color: var(--accent-hover);
+}
+.app-update-release-link:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+@media (max-width: 600px) {
+  .app-update-summary {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .app-update-action {
+    width: 100%;
+  }
 }
 .whats-new-backdrop {
   z-index: 1100;

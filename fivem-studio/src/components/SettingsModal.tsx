@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type {
+  AppUpdateState,
   ArtifactProgress,
   ArtifactStatus,
   CfxTarget,
@@ -16,10 +17,16 @@ import { t } from "../i18n";
 import { COST_LABEL, PROVIDER_PRESETS, matchPreset } from "../providerPresets";
 import { useDialogFocus } from "../hooks/useDialogFocus";
 import SetupChecklist from "./SetupChecklist";
+import AppUpdateControl from "./AppUpdateControl";
 
 interface SettingsModalProps {
   config: StudioConfig;
   themePacks: ThemePack[];
+  appUpdateState: AppUpdateState;
+  appUpdateBusy?: boolean;
+  onCheckAppUpdate: () => void | Promise<void>;
+  onDownloadAppUpdate: () => void | Promise<void>;
+  onRestartAppUpdate: () => void | Promise<void>;
   onThemePreview: (preference: ThemePreference) => void;
   onReloadThemePacks: () => Promise<ThemePack[]>;
   onSave: (config: StudioConfig) => Promise<void>;
@@ -46,7 +53,19 @@ function clientExeFor(config: StudioConfig, target: CfxTarget): string | null {
   return config.redmClientExePath;
 }
 
-export default function SettingsModal({ config, themePacks, onThemePreview, onReloadThemePacks, onSave, onClose }: SettingsModalProps) {
+export default function SettingsModal({
+  config,
+  themePacks,
+  appUpdateState,
+  appUpdateBusy,
+  onCheckAppUpdate,
+  onDownloadAppUpdate,
+  onRestartAppUpdate,
+  onThemePreview,
+  onReloadThemePacks,
+  onSave,
+  onClose,
+}: SettingsModalProps) {
   const [draft, setDraft] = useState<StudioConfig>(config);
   const [busy, setBusy] = useState(false);
   const [profiles, setProfiles] = useState<ProfileInfo[]>([]);
@@ -513,6 +532,16 @@ export default function SettingsModal({ config, themePacks, onThemePreview, onRe
 
   const operationBusy = busy || creatingWorkspace || artifactBusy !== null || detectingExecutable !== null
     || loadingModels || themeBusy !== null || rconBusy;
+  const restartBlockedReason = operationBusy
+    ? t("appUpdate.restartBlockedOperation")
+    : JSON.stringify(draft) !== JSON.stringify(config)
+      || apiKeyDraft.trim() !== ""
+      || localKeyDraft.trim() !== ""
+      || workspaceName.trim() !== ""
+      || workspacePort !== "30120"
+      || rconPreview !== null
+      ? t("appUpdate.restartBlockedSettings")
+      : null;
   const dialogRef = useDialogFocus<HTMLDivElement>(onClose, !operationBusy);
 
   useEffect(() => {
@@ -525,6 +554,16 @@ export default function SettingsModal({ config, themePacks, onThemePreview, onRe
         <h3 id="settings-title" data-dialog-initial-focus tabIndex={-1}>Settings</h3>
 
         {saveError && <div id="settings-save-error" className="error-text settings-save-error" role="alert" tabIndex={-1}>{saveError}</div>}
+
+        <div className="settings-divider">{t("appUpdate.section")}</div>
+        <AppUpdateControl
+          state={appUpdateState}
+          busy={appUpdateBusy}
+          onCheck={onCheckAppUpdate}
+          onDownload={onDownloadAppUpdate}
+          onRestart={onRestartAppUpdate}
+          restartBlockedReason={restartBlockedReason}
+        />
 
         <div className="settings-divider">{t("appearance.section")}</div>
         <label className="field-label">{t("appearance.theme")}</label>

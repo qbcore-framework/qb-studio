@@ -24,6 +24,14 @@
           {
             "path": "release/QB-Studio-Setup-*.exe",
             "label": "QB Studio Windows installer"
+          },
+          {
+            "path": "release/latest.yml",
+            "label": "QB Studio update manifest"
+          },
+          {
+            "path": "release/QB-Studio-Setup-*.exe.blockmap",
+            "label": "QB Studio Windows installer blockmap"
           }
         ],
         "successComment": false,

@@ -16,7 +16,7 @@ import { lastConsoleLines } from "./consoleText";
 import { activateTheme } from "./theme";
 import { PerPathSaveQueue, reconcileSuccessfulSave } from "../electron/editorSaveReconciliation";
 import type {
-  AppUpdateStatus,
+  AppUpdateState,
   CfxTarget,
   CrashTriageContext,
   FileSnapshot,
@@ -90,6 +90,16 @@ const DEFAULT_CONFIG: StudioConfig = {
 };
 
 const EMPTY_PROFILE: ResolvedProfile = { profileRoot: "", resourcesPath: null, serverCfgPath: null };
+const LOADING_APP_UPDATE_STATE: AppUpdateState = {
+  phase: "disabled",
+  currentVersion: "…",
+  latestVersion: null,
+  releaseUrl: null,
+  progressPercent: null,
+  transferredBytes: null,
+  totalBytes: null,
+  error: null,
+};
 
 function cfxTargetLabel(target: CfxTarget): string {
   if (target === "legacy") return "FiveM Legacy";
@@ -130,7 +140,9 @@ export default function App() {
   const [serverStatusError, setServerStatusError] = useState<string | null>(null);
   const [serverNotice, setServerNotice] = useState<{ message: string; error: boolean } | null>(null);
   const [artifactNotice, setArtifactNotice] = useState<string | null>(null);
-  const [availableUpdate, setAvailableUpdate] = useState<AppUpdateStatus | null>(null);
+  const [appUpdateState, setAppUpdateState] = useState<AppUpdateState | null>(null);
+  const [appUpdateBusy, setAppUpdateBusy] = useState(false);
+  const [dismissedUpdateVersion, setDismissedUpdateVersion] = useState<string | null>(null);
   const [whatsNew, setWhatsNew] = useState<WhatsNewState | null>(null);
   const serverStatusEpoch = useRef(0);
   const observedServerRunning = useRef<boolean | null>(null);
@@ -320,21 +332,57 @@ export default function App() {
     void window.api.theme.preview(preference);
   }, []);
 
-  // This is intentionally notification-only. Installation remains an explicit
-  // choice on the signed GitHub release page, and development builds skip the request.
+  // Subscribe before fetching the snapshot so a fast provider event cannot be
+  // lost between initialization and the first renderer paint. Startup failures
+  // stay quiet; explicit checks and downloads surface their errors in state.
   useEffect(() => {
     let cancelled = false;
-    void window.api.app.checkForUpdate()
-      .then((status) => {
-        if (!cancelled && status?.updateAvailable) setAvailableUpdate(status);
+    const unsubscribe = window.api.app.onUpdateState((state) => {
+      if (!cancelled) setAppUpdateState(state);
+    });
+    void window.api.app.getUpdateState()
+      .then((state) => {
+        if (!cancelled) setAppUpdateState(state);
+        return window.api.app.checkForUpdate(false);
+      })
+      .then((state) => {
+        if (!cancelled) setAppUpdateState(state);
       })
       .catch(() => {
-        // Updates are advisory; offline/rate-limited starts must remain quiet and usable.
+        // Offline and rate-limited starts must remain quiet and usable.
       });
     return () => {
       cancelled = true;
+      unsubscribe();
     };
   }, []);
+
+  const runAppUpdateAction = useCallback(async (action: () => Promise<AppUpdateState>) => {
+    setAppUpdateBusy(true);
+    try {
+      const state = await action();
+      setAppUpdateState(state);
+    } catch (error) {
+      const message = (error as Error).message || "QB Studio couldn't complete the update.";
+      setAppUpdateState((current) => current ? { ...current, phase: "error", error: message } : current);
+      throw error;
+    } finally {
+      setAppUpdateBusy(false);
+    }
+  }, []);
+
+  const checkForAppUpdate = useCallback(
+    () => runAppUpdateAction(() => window.api.app.checkForUpdate(true)),
+    [runAppUpdateAction],
+  );
+  const downloadAppUpdate = useCallback(
+    () => runAppUpdateAction(() => window.api.app.downloadUpdate()),
+    [runAppUpdateAction],
+  );
+  const restartToAppUpdate = useCallback(
+    () => runAppUpdateAction(() => window.api.app.restartToUpdate()),
+    [runAppUpdateAction],
+  );
 
   useEffect(() => {
     void window.api.app.consumeWhatsNew().then(setWhatsNew).catch(() => setWhatsNew(null));
@@ -1285,17 +1333,38 @@ export default function App() {
     content: artifactNotice,
     onDismiss: () => setArtifactNotice(null),
   });
-  if (availableUpdate) statusItems.push({
-    id: "update",
+  if (appUpdateState?.phase === "available" && appUpdateState.latestVersion && appUpdateState.latestVersion !== dismissedUpdateVersion) {
+    const availableVersion = appUpdateState.latestVersion;
+    statusItems.push({
+      id: "update-available",
+      tone: "info",
+      content: t("appUpdate.banner.available", { version: availableVersion }),
+      actions: <button className="btn small" onClick={() => void downloadAppUpdate().catch(() => undefined)}>{t("appUpdate.download")}</button>,
+      onDismiss: () => setDismissedUpdateVersion(availableVersion),
+    });
+  }
+  if (appUpdateState?.phase === "downloading") statusItems.push({
+    id: "update-downloading",
     tone: "info",
-    content: `QB Studio ${availableUpdate.latestVersion} is available.`,
-    actions: <button className="btn small" onClick={() => void window.api.shell.openExternal(availableUpdate.releaseUrl)}>View release</button>,
-    onDismiss: () => setAvailableUpdate(null),
+    content: t("appUpdate.banner.downloading", { version: appUpdateState.latestVersion ?? "update" }),
+  });
+  if (appUpdateState?.phase === "ready") statusItems.push({
+    id: "update-ready",
+    tone: "info",
+    content: t("appUpdate.banner.ready", { version: appUpdateState.latestVersion ?? "update" }),
+    actions: <button className="btn small primary" onClick={() => void restartToAppUpdate().catch(() => undefined)}>{t("appUpdate.restart")}</button>,
+  });
+  if (appUpdateState?.phase === "error" && appUpdateState.error) statusItems.push({
+    id: "update-error",
+    tone: "warning",
+    content: appUpdateState.error,
+    actions: <button className="btn small" onClick={() => void checkForAppUpdate().catch(() => undefined)}>{t("appUpdate.banner.retry")}</button>,
   });
 
   return (
     <div className="app-shell">
       <TopBar
+        appVersion={appUpdateState?.currentVersion ?? "…"}
         connected={connected}
         runtimeIdentity={runtimeIdentity}
         workspaceMatch={workspaceMatch}
@@ -1506,6 +1575,11 @@ export default function App() {
         <SettingsModal
           config={config}
           themePacks={themePacks}
+          appUpdateState={appUpdateState ?? LOADING_APP_UPDATE_STATE}
+          appUpdateBusy={appUpdateBusy}
+          onCheckAppUpdate={checkForAppUpdate}
+          onDownloadAppUpdate={downloadAppUpdate}
+          onRestartAppUpdate={restartToAppUpdate}
           onThemePreview={previewTheme}
           onReloadThemePacks={reloadThemePacks}
           onSave={handleSaveSettings}

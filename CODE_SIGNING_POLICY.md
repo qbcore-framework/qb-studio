@@ -16,6 +16,14 @@ SignPath Foundation.
 When onboarding is complete, the first signed release will be published as a
 new version. Existing release assets will not be silently replaced.
 
+Installed Windows releases check the official GitHub release feed at startup.
+Downloading an update is always user-initiated, and installation requires an
+explicit **Restart to update** action; unsaved editor changes block that
+restart. Current unsigned updates are delivered over GitHub HTTPS and checked
+against the SHA-512 digest in `latest.yml`. This detects changed installer
+bytes within that release channel, but it is not an independent assertion of
+publisher identity and must not be described as equivalent to Authenticode.
+
 ## Source and build requirements
 
 Release signing is limited to artifacts that:
@@ -30,6 +38,12 @@ Release signing is limited to artifacts that:
   dependency audit, and packaged-runtime verification; and
 - are submitted through the SignPath integration with verified source and build
   origin.
+
+An updater-enabled release consists of the installer, `latest.yml`, and the
+matching installer blockmap. Signing changes the installer bytes, so updater
+metadata must describe the final signed installer rather than an unsigned
+pre-signing artifact. Release verification must confirm that the metadata
+SHA-512 and size match those final bytes.
 
 Local developer builds, pull-request artifacts, externally supplied binaries,
 and rebuilt historical artifacts are not eligible for the public release
@@ -64,6 +78,14 @@ gh attestation verify <installer> -R qbcore-framework/qb-studio --signer-workflo
 Authenticode and GitHub provenance are complementary: the Windows signature
 identifies the publisher and detects tampering, while the GitHub attestation
 ties the published file to the repository's release workflow.
+
+After signing is enabled, packaged updater configuration must include the exact
+certificate subject as `publisherName`, and the Windows updater must reject a
+download whose Authenticode signer does not match. During an approved
+certificate rotation, the updater may temporarily allow both reviewed
+publisher subjects. Until that enforcement is present in a signed release,
+SHA-512 verification and GitHub transport do not supply independent publisher
+identity.
 
 ## Reporting concerns
 

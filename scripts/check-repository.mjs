@@ -43,6 +43,29 @@ assert(packageLock.packages?.[""]?.engines?.npm === "11.19.0", "package-lock.jso
 assert(packageLock.packages?.["node_modules/dompurify"]?.version === "3.4.14", "The reviewed DOMPurify override is not locked.");
 assert(desktopPackage.dependencies?.koffi === "3.1.6", "Koffi must remain exact because npm cannot pin its nested workspace install-script identity.");
 assert(packageLock.packages?.["fivem-studio/node_modules/koffi"]?.version === "3.1.6", "The reviewed Koffi install script version is not locked.");
+assert(desktopPackage.dependencies?.["electron-updater"] === "6.8.9", "electron-updater must remain pinned to the reviewed 6.8.9 release.");
+assert(packageLock.packages?.["fivem-studio"]?.dependencies?.["electron-updater"] === "6.8.9", "The workspace lock metadata must pin electron-updater 6.8.9.");
+assert(packageLock.packages?.["node_modules/electron-updater"]?.version === "6.8.9", "The installed electron-updater lock entry has drifted from 6.8.9.");
+
+const expectedPublishConfig = [{ provider: "github", owner: "qbcore-framework", repo: "qb-studio" }];
+assert(
+  JSON.stringify(desktopPackage.build?.publish) === JSON.stringify(expectedPublishConfig),
+  "The packaged updater must use the explicit official QB Studio GitHub provider configuration.",
+);
+
+const semanticRelease = readJson(".releaserc.json");
+const githubReleasePlugin = semanticRelease.plugins?.find(
+  (plugin) => Array.isArray(plugin) && plugin[0] === "@semantic-release/github",
+);
+const expectedReleaseAssets = [
+  { path: "release/QB-Studio-Setup-*.exe", label: "QB Studio Windows installer" },
+  { path: "release/latest.yml", label: "QB Studio update manifest" },
+  { path: "release/QB-Studio-Setup-*.exe.blockmap", label: "QB Studio Windows installer blockmap" },
+];
+assert(
+  JSON.stringify(githubReleasePlugin?.[1]?.assets) === JSON.stringify(expectedReleaseAssets),
+  "Semantic release must publish the exact installer, latest.yml, and versioned installer blockmap patterns.",
+);
 
 const gitignore = readText(".gitignore");
 for (const nestedLock of ["fivem-studio/package-lock.json", "fivem-mcp-server/package-lock.json"]) {
@@ -71,6 +94,10 @@ for (const name of fs.readdirSync(workflowsDir).filter((entry) => /\.ya?ml$/i.te
     assert(!workflow.includes("npm audit --omit=dev"), `${name} omits bundled renderer code from its dependency audit.`);
   }
 }
+const releaseWorkflow = readText(".github/workflows/release.yml");
+assert(releaseWorkflow.includes('$installerPath = "release/QB-Studio-Setup-$version-x64.exe"'), "The release workflow must resolve the exact versioned installer.");
+assert(releaseWorkflow.includes('$blockmapPath = "$installerPath.blockmap"'), "The release workflow must resolve the exact versioned installer blockmap.");
+assert(releaseWorkflow.includes("Test-Path -LiteralPath release/latest.yml -PathType Leaf"), "The release workflow must require latest.yml before reporting a release.");
 
 const releaseScript = readText("scripts/package-release.mjs");
 assert(!releaseScript.includes('run(npm, ["install"'), "Release packaging must not re-resolve the reviewed lockfile.");

@@ -24,7 +24,7 @@ screenshots.
 - GitHub repository and organization search with resource imports
 - AI assistant scoped to project files and coding-oriented runtime tools
 - Bundled private runtime: no separate Node or MCP server to launch
-- Passive notification when a newer stable QB Studio release is available
+- User-controlled application updates with download progress and an explicit **Restart to update** step
 
 GitHub imports require [Git for Windows](https://git-scm.com/download/win).
 
@@ -34,6 +34,9 @@ Download the latest Windows installer from
 [Releases](https://github.com/qbcore-framework/qb-studio/releases) and run it once.
 Choose the `.exe`; GitHub automatically adds source-code ZIP and TAR archives,
 but they are not installers.
+After an updater-enabled release is installed, normal updates can be checked,
+downloaded, and applied from **Settings → About & updates** without manually
+visiting the Releases page.
 QB Studio does not require any resource to be added to your server. Point
 it at an existing Cfx.re Windows server artifact and it can start that local
 server, launch the selected FiveM or RedM client separately, and update the artifact files.
@@ -215,6 +218,25 @@ scripts, URLs, unknown color keys, oversized files, and links. A minimal pack is
 The import error identifies unsupported keys, so pack authors can start small
 and add only the colors they want to override.
 
+## QB Studio application updates
+
+Installed Windows releases check the official QB Studio GitHub release feed at
+startup. The current application version is always visible in the top bar and
+in **Settings → About & updates**. A release build never begins downloading an
+application update merely because it found one: select **Download update** to
+start the download, then select **Restart to update** after verification and
+staging finish.
+
+Restarting for an update closes and reopens QB Studio. Save all editor changes
+first; QB Studio blocks the update restart while any editor tab has unsaved
+changes. Development and unpackaged builds show their version but do not use
+the installed-release updater.
+
+Each updater-enabled release publishes three coordinated files: the Windows
+installer, `latest.yml`, and the installer's `.blockmap`. The metadata contains
+the SHA-512 digest used to check the downloaded installer, while the blockmap
+allows differential downloads with a full-download fallback.
+
 ## Server artifact updates
 
 In Settings, save the server executable path and select **Check**. Recommended
@@ -238,18 +260,27 @@ Windows artifacts, so QB Studio does not claim publisher-signature
 verification. It records its own SHA-256 after download for the local install
 record.
 
-Early releases are unsigned, so Windows may show an “Unknown publisher” or
-SmartScreen warning. Download only from the `qbcore-framework/qb-studio` release
-page and verify the GitHub build attestation:
+## Release integrity and signatures
+
+Current release artifacts are unsigned, so Windows may show an “Unknown
+publisher” or SmartScreen warning. Application updates are fetched from GitHub
+over HTTPS and the downloaded installer is checked against the SHA-512 digest
+in the release metadata. Those controls provide integrity within the GitHub
+release channel, but they do not independently authenticate the Windows
+publisher. Authenticode signing and updater `publisherName` enforcement remain
+the priority trust upgrade. Download only from the
+`qbcore-framework/qb-studio` release channel and verify the GitHub build
+attestation when checking a release manually:
 
 ```powershell
 gh attestation verify <installer> -R qbcore-framework/qb-studio --signer-workflow qbcore-framework/qb-studio/.github/workflows/release.yml
 ```
 
 After publication, a separate least-privilege workflow job records build and
-CycloneDX SBOM attestations without adding another user-facing download to the
-release. Treat a release as attested only after that job succeeds; see the
-[build guide](BUILDING.md) for the residual non-atomic publication window.
+CycloneDX SBOM attestations for the installer. Users do not need to download
+`latest.yml` or the blockmap manually; the installed updater consumes them.
+Treat a release as attested only after that job succeeds; see the [build
+guide](BUILDING.md) for the residual non-atomic publication window.
 
 ## Code signing policy
 
@@ -294,9 +325,10 @@ npm run dev -w qb-studio
 See [BUILDING.md](BUILDING.md) for output locations, the complete package
 checks, SBOM scope, and release recovery guidance.
 
-Stable builds check the official GitHub latest-release endpoint once at startup
-and show a dismissible link when an update is available. QB Studio never
-downloads or installs application updates automatically.
+Installed release builds check the official GitHub release feed at startup.
+Finding an update does not download or install it: download is always
+user-initiated, and installation requires an explicit **Restart to update**
+after unsaved editor changes have been saved.
 
 Conventional commits on `main` are automatically versioned by semantic-release
 and published as GitHub Releases. Dependency updates are proposed weekly and

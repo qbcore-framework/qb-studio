@@ -1,6 +1,6 @@
 # Privacy policy
 
-Last updated: August 29, 2026
+Last updated: August 30, 2026
 
 This policy describes the privacy behavior of the QB Studio Windows desktop
 application distributed from
@@ -13,11 +13,12 @@ telemetry, crash reports, project files, or usage data to QBCore Framework.
 QBCore Framework does not operate a QB Studio cloud service or user database.
 
 QB Studio is a local development tool. Some features make network requests when
-the user invokes them or configures an external service. Stable builds also
-make one public GitHub release request at startup to provide a passive update
-notice. Opt-in Discord Rich Presence shares a deliberately narrow
-activity through the local Discord desktop client and can be disabled in
-Settings, as described below.
+the user invokes them or configures an external service. Installed release
+builds also check the public GitHub release feed at startup. Downloading an
+application update is always user-initiated, and installing it requires the
+user to select **Restart to update**. Opt-in Discord Rich Presence shares a
+deliberately narrow activity through the local Discord desktop client and can
+be disabled in Settings, as described below.
 
 ## Data stored on the device
 
@@ -32,6 +33,13 @@ sent only to the provider endpoint selected by the user for authentication.
 Conversation history is held in application memory for the active session and
 is not persisted by QB Studio. Imported repositories and user-approved file
 changes are stored in the workspace selected by the user.
+
+After the user selects **Download update**, updater metadata and the downloaded
+installer can be retained in a local updater cache until installation or cache
+cleanup. This cache does not contain project files, model-provider keys, or AI
+conversation contents. The updater also stores a random staging identifier in
+the application data directory so a future release can use a consistent staged
+rollout cohort; it is unrelated to the user's Windows or GitHub identity.
 
 Uninstalling the application might not remove settings retained in the Windows
 application data directory. Users can delete that local data manually and can
@@ -77,10 +85,17 @@ policies of a provider selected by the user.
   Discord associates and distributes presence under the user's Discord account
   and the [Discord Privacy Policy](https://discord.com/privacy). Disabling the
   setting clears QB Studio's activity and closes its local Discord connection.
-- **QB Studio release check:** On startup, a stable build requests the latest
+- **QB Studio application updates:** On startup, an installed release requests
   public release metadata from the official GitHub repository. The request does
-  not include project files, settings, or a persistent application identifier.
-  GitHub receives ordinary connection metadata under its privacy statement.
+  not include project files, settings, provider keys, or conversation contents.
+  It does include the updater's random persistent staging identifier, which
+  supports consistent staged rollout decisions and is not tied to an account.
+  No application update is downloaded until the user selects **Download
+  update**. That action requests the release metadata, blockmap when applicable,
+  and Windows installer from GitHub and stores the downloaded files locally.
+  Installation begins only when the user selects **Restart to update**, and is
+  blocked while editor tabs have unsaved changes. GitHub receives ordinary
+  connection metadata under its privacy statement.
 - **GitHub import:** Repository search and metadata requests use GitHub's public
   API. Importing a selected repository invokes Git to download it from GitHub.
   GitHub receives the request and ordinary connection metadata under the

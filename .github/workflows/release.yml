@@ -65,7 +65,7 @@ jobs:
         run: npm run release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Inspect attestation inputs
+      - name: Inspect release and attestation inputs
         id: assets
         shell: pwsh
         run: |
@@ -80,6 +80,22 @@ jobs:
           }
           if ($installers.Count -ne 1) {
             throw "Expected one release installer, found $($installers.Count)."
+          }
+          $version = (Get-Content -LiteralPath fivem-studio/package.json -Raw | ConvertFrom-Json).version
+          $installerPath = "release/QB-Studio-Setup-$version-x64.exe"
+          if (-not (Test-Path -LiteralPath $installerPath -PathType Leaf)) {
+            throw "Expected release installer $installerPath, found $($installers[0].Name)."
+          }
+          if ($installers[0].FullName -ne [IO.Path]::GetFullPath((Join-Path $PWD $installerPath))) {
+            throw "Expected release installer $installerPath, found $($installers[0].Name)."
+          }
+          $blockmaps = @(Get-ChildItem -LiteralPath release -File -Filter "QB-Studio-Setup-*.exe.blockmap")
+          $blockmapPath = "$installerPath.blockmap"
+          if ($blockmaps.Count -ne 1 -or -not (Test-Path -LiteralPath $blockmapPath -PathType Leaf)) {
+            throw "Expected one exact release blockmap at $blockmapPath, found $($blockmaps.Count)."
+          }
+          if (-not (Test-Path -LiteralPath release/latest.yml -PathType Leaf)) {
+            throw "The release was published without latest.yml update metadata."
           }
           if (-not (Test-Path -LiteralPath release/bom.cdx.json -PathType Leaf)) {
             throw "The release was published without its SBOM attestation input."

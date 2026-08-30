@@ -57,7 +57,7 @@ creating an installer:
 npm run build
 ```
 
-Build and verify the unsigned Windows installer:
+Build and verify the unsigned Windows installer and its updater metadata:
 
 ```powershell
 npm run dist
@@ -69,7 +69,9 @@ Generated output is written below `fivem-studio/dist`,
 package verifier checks the exact versioned installer, renderer manifest,
 native Koffi module, bundled runtime identity, LuaLS pin and license, Lua
 definitions, and exclusion of application tests, source maps, and local secret
-files.
+files. Release qualification additionally requires the exact `latest.yml` and
+installer blockmap generated with that installer; the release workflow rejects
+a missing or ambiguously named member of the updater set.
 
 ## Release lifecycle
 
@@ -77,7 +79,20 @@ Conventional commits merged to `main` are evaluated by semantic-release. When
 a release is required, its prepare phase updates package metadata in the
 working copy without resolving dependency ranges again, builds the installer,
 verifies that exact installer, and creates a CycloneDX SBOM for the complete
-locked dependency graph. The GitHub plugin then publishes the release.
+locked dependency graph. The GitHub plugin then publishes the coordinated
+updater set: exactly one versioned Windows installer, `latest.yml`, and the
+matching versioned `.blockmap`. A release missing any member of that set is not
+usable by the installed updater and must fail release qualification.
+
+The current artifacts are unsigned. GitHub HTTPS transport plus the SHA-512
+digest in `latest.yml` protect the downloaded bytes within the GitHub release
+channel, but do not provide independent publisher identity. Authenticode
+signing remains the priority trust upgrade. Once signing is available, the
+final installer must be signed before its updater metadata is finalized,
+because signing changes the installer bytes. Package verification must then
+confirm that `latest.yml` describes the final signed file and that packaged
+`app-update.yml` contains the exact certificate subject used by
+`electron-updater` as `publisherName`.
 
 A separate least-privilege job downloads the exact installer and SBOM staged by
 the publish job and records GitHub build-provenance and SBOM attestations. This

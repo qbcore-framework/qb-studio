@@ -161,7 +161,15 @@ const api = {
   app: {
     setDirtyCount: (count: number) => ipcRenderer.invoke("app:setDirtyCount", count),
     setDiscordActivity: (context: { view: string; filePath: string | null }) => ipcRenderer.invoke("app:setDiscordActivity", context),
-    checkForUpdate: () => ipcRenderer.invoke("app:checkForUpdate"),
+    getUpdateState: () => ipcRenderer.invoke("app:getUpdateState"),
+    checkForUpdate: (manual = true) => ipcRenderer.invoke("app:checkForUpdate", manual),
+    downloadUpdate: () => ipcRenderer.invoke("app:downloadUpdate"),
+    restartToUpdate: () => ipcRenderer.invoke("app:restartToUpdate"),
+    onUpdateState: (callback: (state: unknown) => void) => {
+      const listener = (_e: unknown, state: unknown) => callback(state);
+      ipcRenderer.on("app:updateState", listener);
+      return () => ipcRenderer.removeListener("app:updateState", listener);
+    },
     consumeWhatsNew: () => ipcRenderer.invoke("app:consumeWhatsNew"),
   },
   lua: {

@@ -46,11 +46,25 @@ export interface EditorProblem {
   code?: string;
 }
 
-export interface AppUpdateStatus {
+export type AppUpdatePhase =
+  | "disabled"
+  | "idle"
+  | "checking"
+  | "up-to-date"
+  | "available"
+  | "downloading"
+  | "ready"
+  | "error";
+
+export interface AppUpdateState {
+  phase: AppUpdatePhase;
   currentVersion: string;
-  latestVersion: string;
-  releaseUrl: string;
-  updateAvailable: boolean;
+  latestVersion: string | null;
+  releaseUrl: string | null;
+  progressPercent: number | null;
+  transferredBytes: number | null;
+  totalBytes: number | null;
+  error: string | null;
 }
 
 export interface WhatsNewState {
@@ -601,7 +615,11 @@ declare global {
           view: "startup" | "viewport" | "console" | "resources" | "editor" | "review" | "assistant" | "setup" | "settings";
           filePath: string | null;
         }): Promise<void>;
-        checkForUpdate(): Promise<AppUpdateStatus | null>;
+        getUpdateState(): Promise<AppUpdateState>;
+        checkForUpdate(manual?: boolean): Promise<AppUpdateState>;
+        downloadUpdate(): Promise<AppUpdateState>;
+        restartToUpdate(): Promise<AppUpdateState>;
+        onUpdateState(callback: (state: AppUpdateState) => void): () => void;
         consumeWhatsNew(): Promise<WhatsNewState | null>;
       };
       lua: {

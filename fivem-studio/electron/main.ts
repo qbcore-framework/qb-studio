@@ -1,4 +1,5 @@
-import { app, BrowserWindow, ipcMain, dialog, shell, Menu, nativeTheme, Notification, clipboard, screen } from "electron";
+import { app, BrowserWindow, ipcMain, dialog, shell, Menu, nativeTheme, Notification, clipboard, screen, type IpcMainInvokeEvent } from "electron";
+import { autoUpdater } from "electron-updater";
 import path from "node:path";
 import fs from "node:fs";
 import { spawn, spawnSync } from "node:child_process";
@@ -59,7 +60,7 @@ import {
   stopLocalServer,
   type ArtifactTrack,
 } from "./serverArtifacts";
-import { checkForAppUpdate } from "./appUpdate";
+import { AppUpdateController, appUpdateRestartBlockReason, type AppUpdateState } from "./appUpdate";
 import { resourceAtDirectory, resolveResourceContext } from "./resourceContext";
 import { RevertStore, type RevertMode } from "./revertStore";
 import { detectConventionalClientInstalls, detectConventionalExecutables } from "./clientInstallDiscovery";
@@ -79,6 +80,7 @@ import { ThemePackStore, customThemeId, themeBaseForPreference } from "./themePa
 
 let mainWindow: BrowserWindow | null = null;
 let consoleWindow: BrowserWindow | null = null;
+let appUpdateController: AppUpdateController | null = null;
 const isPrimaryInstance = app.requestSingleInstanceLock();
 if (!isPrimaryInstance) app.quit();
 
@@ -121,6 +123,24 @@ function requireString(value: unknown, label: string, maxLength = 32767): string
 function requireFiniteNumber(value: unknown, label: string): number {
   if (typeof value !== "number" || !Number.isFinite(value)) throw new Error(`${label} must be a finite number.`);
   return value;
+}
+
+function requireMainWindowSender(event: IpcMainInvokeEvent): void {
+  if (!mainWindow || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents) {
+    throw new Error("Application updates are available only from the main QB Studio window.");
+  }
+}
+
+function requireAppUpdateController(): AppUpdateController {
+  if (!appUpdateController) throw new Error("Application updates are not ready yet.");
+  return appUpdateController;
+}
+
+function broadcastAppUpdateState(state: AppUpdateState): void {
+  // A failed installer launch leaves the app running; restore the ordinary
+  // close guard so edits made afterward can never bypass its warning.
+  if (state.phase === "error") allowCloseWithUnsavedChanges = false;
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send("app:updateState", state);
 }
 
 function requireRevertStore(): RevertStore {
@@ -562,6 +582,12 @@ app.whenReady().then(() => {
   setProjectRevertStore(revertStore);
   workspaceSearch = new WorkspaceSearchService(revertStore);
   bookmarkStore = new BookmarkStore(path.join(app.getPath("userData"), "bookmarks"));
+  appUpdateController = new AppUpdateController(
+    autoUpdater,
+    app.getVersion(),
+    app.isPackaged,
+    broadcastAppUpdateState,
+  );
 
   registerIpcHandlers();
   createWindow();
@@ -1123,7 +1149,49 @@ function registerIpcHandlers() {
   ipcMain.handle("app:setDiscordActivity", (_e, context: unknown) => {
     discordPresence.setContext(context);
   });
-  ipcMain.handle("app:checkForUpdate", () => checkForAppUpdate(app.getVersion()));
+  ipcMain.handle("app:getUpdateState", (event) => {
+    requireMainWindowSender(event);
+    return requireAppUpdateController().snapshot();
+  });
+  ipcMain.handle("app:checkForUpdate", (event, manualValue: unknown = true) => {
+    requireMainWindowSender(event);
+    if (typeof manualValue !== "boolean") throw new Error("Manual update check must be a boolean.");
+    return requireAppUpdateController().checkForUpdates(manualValue);
+  });
+  ipcMain.handle("app:downloadUpdate", (event) => {
+    requireMainWindowSender(event);
+    return requireAppUpdateController().downloadUpdate();
+  });
+  ipcMain.handle("app:restartToUpdate", (event) => {
+    requireMainWindowSender(event);
+    const updater = requireAppUpdateController();
+    const updateState = updater.snapshot();
+    const blockReason = appUpdateRestartBlockReason(updateState, dirtyFileCount);
+    if (blockReason && updateState.phase !== "ready") throw new Error(blockReason);
+    if (dirtyFileCount > 0) {
+      const plural = dirtyFileCount === 1 ? "file has" : "files have";
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        dialog.showMessageBoxSync(mainWindow, {
+          type: "warning",
+          buttons: ["OK"],
+          defaultId: 0,
+          title: "Save changes before updating",
+          message: `${dirtyFileCount} ${plural} unsaved changes.`,
+          detail: "Save or discard those editor changes, then choose Restart to update again.",
+        });
+      }
+      return updater.snapshot();
+    }
+    allowCloseWithUnsavedChanges = true;
+    try {
+      const state = updater.restartToUpdate();
+      if (state.phase === "error") allowCloseWithUnsavedChanges = false;
+      return state;
+    } catch (error) {
+      allowCloseWithUnsavedChanges = false;
+      throw error;
+    }
+  });
   ipcMain.handle("app:consumeWhatsNew", () => {
     try {
       return consumeWhatsNew(path.join(app.getPath("userData"), "last-seen-version.json"), app.getVersion(), app.isPackaged);
