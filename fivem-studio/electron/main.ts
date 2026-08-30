@@ -6,17 +6,27 @@ import { spawn, spawnSync } from "node:child_process";
 
 import {
   loadConfig,
+  normalizeConfig,
+  recoverConfigTransaction,
   saveConfig,
-  saveApiKey,
-  hasApiKey,
-  saveProviderKey,
-  hasProviderKey,
+  saveConfigWithConnectionKeys,
+  hasConnectionKey,
   CFX_TARGETS,
   type CfxTarget,
   type StudioConfig,
   type ThemePreference,
 } from "./configStore";
 import * as agent from "./agent";
+import {
+  agentRuntimeSignature,
+  requireAgentConnectionId,
+  requireAgentConnectionProbe,
+  requireAgentCredentialUpdates,
+  requireAgentSettingsUpdate,
+  requireConnectionKey,
+  withAgentTarget,
+  withCredentialRevision,
+} from "./agentConnectionPolicy";
 import { listDir, readTextFileSnapshot, writeTextFile, renamePath, listProfiles, resolveProfile } from "./fsTree";
 import { watchPath, stopWatching } from "./fsWatch";
 import {
@@ -47,7 +57,6 @@ import {
   parseLocalServerConfig,
   stopManagedRuntime,
 } from "./managedRuntime";
-import { parseProviderUrl } from "./localUrl";
 import { OperationLock } from "./operationLock";
 import { LuaLanguageServerProcess, type JsonRpcMessage } from "./luaLanguageServer";
 import {
@@ -125,6 +134,12 @@ function requireString(value: unknown, label: string, maxLength = 32767): string
   return value;
 }
 
+function broadcastConfig(config: StudioConfig): void {
+  for (const window of [mainWindow, consoleWindow]) {
+    if (window && !window.isDestroyed()) window.webContents.send("config:changed", config);
+  }
+}
+
 function requireFiniteNumber(value: unknown, label: string): number {
   if (typeof value !== "number" || !Number.isFinite(value)) throw new Error(`${label} must be a finite number.`);
   return value;
@@ -132,7 +147,7 @@ function requireFiniteNumber(value: unknown, label: string): number {
 
 function requireMainWindowSender(event: IpcMainInvokeEvent): void {
   if (!mainWindow || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents) {
-    throw new Error("Application updates are available only from the main QB Studio window.");
+    throw new Error("This action is available only from the main QB Studio window.");
   }
 }
 
@@ -577,6 +592,17 @@ app.whenReady().then(() => {
   // so the native menu bar is just redundant chrome sitting above it.
   Menu.setApplicationMenu(null);
 
+  try {
+    recoverConfigTransaction();
+  } catch (error) {
+    dialog.showErrorBox(
+      "QB Studio could not recover settings",
+      `An interrupted settings save could not be recovered safely. No configuration was loaded. ${error instanceof Error ? error.message : String(error)}`,
+    );
+    app.quit();
+    return;
+  }
+
   const startupConfig = loadConfig();
   themePackStore = new ThemePackStore(path.join(app.getPath("userData"), "themes"));
   try { recordRecentWorkspace(recentWorkspacesPath(), startupConfig); } catch { /* non-critical app history */ }
@@ -639,7 +665,10 @@ app.on("before-quit", () => discordPresence.stop());
 
 function registerIpcHandlers() {
   // --- config ---
-  ipcMain.handle("config:get", () => loadConfig());
+  ipcMain.handle("config:get", (event) => {
+    requireStudioWindowSender(event);
+    return loadConfig();
+  });
   ipcMain.handle("console:openPopout", () => openConsoleWindow());
   ipcMain.handle("console:clearView", () => clearConsoleViews());
   ipcMain.handle("console:openSourceLocation", async (event, request: unknown) => {
@@ -661,19 +690,21 @@ function registerIpcHandlers() {
     requireStudioWindowSender(event);
     const promptConfig = loadConfig();
     const workspaceScope = agentPromptWorkspaceScope(promptConfig.txDataPath, promptConfig.selectedProfile);
+    const promptAgentScope = agentRuntimeSignature(promptConfig);
     const profileRoot = activeProfileRoot();
     const resourcesRoot = activeResourcesRoot();
     const prepared = await prepareConsoleAgentFix(profileRoot, resourcesRoot, request, diagnosticLine);
     const currentConfig = loadConfig();
     if (path.relative(activeProfileRoot(), profileRoot) !== "" ||
-        agentPromptWorkspaceScope(currentConfig.txDataPath, currentConfig.selectedProfile) !== workspaceScope) {
-      throw new Error("The selected workspace changed while preparing that console diagnostic.");
+        agentPromptWorkspaceScope(currentConfig.txDataPath, currentConfig.selectedProfile) !== workspaceScope ||
+        agentRuntimeSignature(currentConfig) !== promptAgentScope) {
+      throw new Error("The selected workspace or agent changed while preparing that console diagnostic.");
     }
     if (!mainWindow || mainWindow.isDestroyed()) throw new Error("The main QB Studio window is unavailable.");
     if (mainWindow.isMinimized()) mainWindow.restore();
     mainWindow.show();
     mainWindow.focus();
-    mainWindow.webContents.send("console:agentFixPrompt", prepared.prompt, workspaceScope);
+    mainWindow.webContents.send("console:agentFixPrompt", prepared.prompt, workspaceScope, promptAgentScope);
   });
   ipcMain.handle("console:clearGeneration", () => consoleClearGeneration);
   ipcMain.handle("console:setRefreshInterval", (_e, value: unknown) =>
@@ -687,15 +718,16 @@ function registerIpcHandlers() {
       return saved.consoleRefreshIntervalMs;
     }),
   );
-  ipcMain.handle("config:set", (_e, config: unknown) =>
-    serverOperation.run("the Settings change", async () => {
+  ipcMain.handle("config:set", (event, config: unknown, credentialUpdatesValue?: unknown) => {
+    requireMainWindowSender(event);
+    return serverOperation.run("the Settings change", async () => {
       if (typeof config !== "object" || config === null || Array.isArray(config)) throw new Error("Configuration must be an object.");
       const candidate = config as Record<string, unknown>;
       const previous = loadConfig();
+      const requestedAgent = requireAgentSettingsUpdate(candidate.agent, previous.agent.credentialRevision);
       const switchingProfile =
         candidate.txDataPath !== previous.txDataPath || candidate.selectedProfile !== previous.selectedProfile;
       if (candidate.txDataPath !== null && candidate.txDataPath !== undefined) scopedTxDataPath(candidate.txDataPath);
-      if (typeof candidate.openaiBaseUrl === "string") parseProviderUrl(candidate.openaiBaseUrl);
       if (typeof candidate.theme === "string" && candidate.theme.startsWith("custom:")) {
         const themeId = customThemeId(candidate.theme as ThemePreference);
         if (!themeId || !requireThemePackStore().find(themeId)) throw new Error("Install that custom theme before saving it.");
@@ -710,8 +742,26 @@ function registerIpcHandlers() {
       scopedFxServerExe(candidate.redmFxServerExePath, "redm", txDataPath);
       // Console refresh is edited by the console itself, not by Settings. Read
       // its latest persisted value inside the same operation lock so a stale,
-      // hidden renderer draft cannot overwrite it.
-      const saved = saveConfig({ ...candidate, consoleRefreshIntervalMs: previous.consoleRefreshIntervalMs });
+      // hidden renderer draft cannot overwrite it. Credential revisions are
+      // likewise main-owned and can change while Settings is open.
+      const requested = {
+        ...candidate,
+        agent: requestedAgent,
+        consoleRefreshIntervalMs: previous.consoleRefreshIntervalMs,
+      };
+      let normalizedRequested = normalizeConfig(requested);
+      const credentialUpdates = requireAgentCredentialUpdates(credentialUpdatesValue, normalizedRequested.agent);
+      if (credentialUpdates.some((update) => update.connectionId === normalizedRequested.agent.active.connectionId)) {
+        normalizedRequested = withCredentialRevision(
+          normalizedRequested,
+          normalizedRequested.agent.active.connectionId,
+        );
+      }
+      const switchingAgent = agentRuntimeSignature(previous) !== agentRuntimeSignature(normalizedRequested);
+      if (switchingAgent && agent.isRunning()) {
+        throw new Error("Stop the current agent response before changing its connection or model.");
+      }
+      const saved = saveConfigWithConnectionKeys(normalizedRequested, credentialUpdates);
       if (switchingProfile) {
         invalidateConsoleSourceIndex();
         clearConsoleViews();
@@ -719,6 +769,8 @@ function registerIpcHandlers() {
         await mcpDisconnect();
         stopManagedRuntime();
         luaLanguageServer.stop();
+      } else if (switchingAgent) {
+        agent.resetConversation();
       }
       previewThemePreference = null;
       try { recordRecentWorkspace(recentWorkspacesPath(), saved); } catch { /* non-critical app history */ }
@@ -726,12 +778,10 @@ function registerIpcHandlers() {
       discordPresence.update(saved.discordPresenceEnabled, saved.activeCfxTarget, app.getVersion());
       mainWindow?.webContents.setZoomFactor(saved.uiScale);
       consoleWindow?.webContents.setZoomFactor(saved.uiScale);
-      for (const window of [mainWindow, consoleWindow]) {
-        if (window && !window.isDestroyed()) window.webContents.send("config:changed", saved);
-      }
+      broadcastConfig(saved);
       return saved;
-    }),
-  );
+    });
+  });
   ipcMain.handle("theme:system", () => resolvedSystemTheme());
   ipcMain.handle("theme:listPacks", () => requireThemePackStore().list());
   ipcMain.handle("theme:preview", (_e, preferenceValue: unknown) => {
@@ -1353,35 +1403,70 @@ function registerIpcHandlers() {
   });
 
   // --- agent chat ---
-  // The key is write-only from the renderer's side: it can set one or ask whether
-  // one exists, but there is no handler that hands the value back out.
-  ipcMain.handle("agent:setApiKey", (_e, key: unknown) => saveApiKey(requireString(key, "API key", 4096)));
-  ipcMain.handle("agent:hasApiKey", () => hasApiKey());
-  ipcMain.handle("agent:setProviderKey", (_e, baseUrl: unknown, key: unknown) =>
-    saveProviderKey(parseProviderUrl(requireString(baseUrl, "Provider URL", 4096)).toString(), requireString(key, "API key", 4096)),
-  );
-  ipcMain.handle("agent:hasProviderKey", (_e, baseUrl: unknown) => hasProviderKey(requireString(baseUrl, "Provider URL", 4096)));
-  ipcMain.handle("agent:listModels", (_e, baseUrl: unknown, keyOverride?: unknown) =>
-    agent.listAvailableModels(
-      parseProviderUrl(requireString(baseUrl, "Provider URL", 4096)).toString(),
-      typeof keyOverride === "string" ? keyOverride : undefined,
-    ),
-  );
-  ipcMain.handle("agent:send", (_e, message: unknown) => {
-    if (mainWindow) return agent.sendMessage(mainWindow, requireString(message, "Message", 100000));
+  // Credentials remain write-only. Every stored-key operation resolves an
+  // opaque configured id main-side; the renderer cannot pair someone else's
+  // saved key with a different endpoint.
+  ipcMain.handle("agent:hasConnectionKey", (event, connectionId: unknown) => {
+    requireMainWindowSender(event);
+    return hasConnectionKey(requireAgentConnectionId(connectionId));
   });
-  ipcMain.handle("agent:cancel", () => agent.cancelTurn());
-  ipcMain.handle("agent:respondToApproval", (_e, approvalId: unknown, approved: unknown) => {
+  ipcMain.handle("agent:listConnectionModels", (event, connectionId: unknown) => {
+    requireMainWindowSender(event);
+    return agent.listConnectionModels(requireAgentConnectionId(connectionId));
+  });
+  ipcMain.handle("agent:probeModels", (event, connectionValue: unknown, keyOverrideValue?: unknown) => {
+    requireMainWindowSender(event);
+    const connection = requireAgentConnectionProbe(connectionValue);
+    const keyOverride = keyOverrideValue === undefined ? "" : requireConnectionKey(keyOverrideValue);
+    if (!connection.requiresKey && keyOverride) {
+      throw new Error("A keyless connection cannot store or send an API key.");
+    }
+    return agent.probeModels(connection, keyOverride);
+  });
+  ipcMain.handle("agent:selectTarget", (event, connectionIdValue: unknown, modelValue: unknown) => {
+    requireMainWindowSender(event);
+    return serverOperation.run("the agent selection change", () => {
+      const current = loadConfig();
+      const selected = withAgentTarget(current, connectionIdValue, modelValue);
+      if (selected === current) return current;
+      if (agent.isRunning()) throw new Error("Stop the current agent response before switching agents.");
+      const saved = saveConfig(selected);
+      agent.resetConversation();
+      broadcastConfig(saved);
+      return saved;
+    });
+  });
+  ipcMain.handle("agent:send", (event, message: unknown, expectedRuntimeScope: unknown) => {
+    requireMainWindowSender(event);
+    if (mainWindow) {
+      return agent.sendMessage(
+        mainWindow,
+        requireString(message, "Message", 100000),
+        requireString(expectedRuntimeScope, "Agent runtime scope", 4096),
+      );
+    }
+  });
+  ipcMain.handle("agent:cancel", (event) => {
+    requireMainWindowSender(event);
+    return agent.cancelTurn();
+  });
+  ipcMain.handle("agent:respondToApproval", (event, approvalId: unknown, approved: unknown) => {
+    requireMainWindowSender(event);
     const resolved = resolveToolApproval(requireString(approvalId, "Approval id", 128), approved === true);
     if (!resolved) throw new Error("That approval request is no longer pending.");
     return { ok: true };
   });
-  ipcMain.handle("agent:setEditorContext", (_e, context: unknown) => {
+  ipcMain.handle("agent:setEditorContext", (event, context: unknown) => {
+    requireMainWindowSender(event);
     if (typeof context !== "object" || context === null) throw new Error("Editor context must be an object.");
     const value = context as EditorContext;
     setEditorContext(value);
   });
-  ipcMain.handle("agent:reset", () => agent.resetConversation());
+  ipcMain.handle("agent:reset", (event) => {
+    requireMainWindowSender(event);
+    if (agent.isRunning()) throw new Error("Stop the current agent response before starting a new chat.");
+    return agent.resetConversation();
+  });
 
   ipcMain.handle("shell:openExternal", (_e, url: unknown) => shell.openExternal(allowedExternalUrl(url)));
   ipcMain.handle("shell:showItemInFolder", (_e, targetPath: unknown) => shell.showItemInFolder(scopedProfilePath(targetPath)));

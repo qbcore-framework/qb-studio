@@ -159,6 +159,7 @@ const english = {
   "whatsNew.consoleSources": "Open supported file and resource locations from console output at the reported line and column.",
   "whatsNew.creationSafety": "Edit current Cfx manifest games, NUI, packfiles, exports, data files, runtime options, and flags in Form view.",
   "whatsNew.agentFix": "Right-click a linked console diagnostic to send its safe, precise context to Agent Chat and begin a fix.",
+  "whatsNew.agentConnections": "Save multiple model-provider accounts, switch connections or models in chat, and jump straight to their settings.",
   "whatsNew.continue": "Continue to QB Studio",
   "agent.spendWarning": "Session spend warning",
   "agent.spendWarning.off": "Off",

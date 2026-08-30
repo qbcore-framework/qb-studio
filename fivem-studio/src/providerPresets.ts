@@ -8,6 +8,8 @@
 // Free-tier terms, endpoints, and model names all change: every field here is
 // editable in Settings, and "Custom" exists for anything not listed.
 
+import { canonicalAgentEndpoint } from "../electron/agentProviderPolicy";
+
 export interface ProviderPreset {
   id: string;
   label: string;
@@ -37,8 +39,8 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     id: "groq",
     label: "Groq",
     baseUrl: "https://api.groq.com/openai/v1",
-    model: "llama-3.3-70b-versatile",
-    note: "Free tier with per-minute and per-day rate limits. Very fast inference.",
+    model: "openai/gpt-oss-120b",
+    note: "Free developer limits are available. Fast inference with strong coding, reasoning, and tool use.",
     cost: "free-tier",
     needsKey: true,
     keyUrl: "https://console.groq.com/keys",
@@ -121,9 +123,9 @@ export const COST_LABEL: Record<ProviderPreset["cost"], string> = {
 /** Which preset a saved config corresponds to, so the picker reopens where the user left it. */
 export function matchPreset(provider: "anthropic" | "openai", baseUrl: string): ProviderPreset {
   if (provider === "anthropic") return PROVIDER_PRESETS.find((p) => p.id === "anthropic")!;
-  const normalize = (u: string) => u.trim().replace(/\/+$/, "");
+  const canonical = canonicalAgentEndpoint(baseUrl);
   return (
-    PROVIDER_PRESETS.find((p) => p.baseUrl && normalize(p.baseUrl) === normalize(baseUrl)) ??
+    PROVIDER_PRESETS.find((p) => p.baseUrl && canonicalAgentEndpoint(p.baseUrl) === canonical) ??
     PROVIDER_PRESETS.find((p) => p.id === "custom")!
   );
 }

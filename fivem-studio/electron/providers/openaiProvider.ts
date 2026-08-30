@@ -13,6 +13,8 @@
 
 import OpenAI from "openai";
 
+import { isLoopbackHostname } from "../localUrl";
+import { isGeminiOpenAIEndpoint } from "../agentProviderPolicy";
 import {
   MAX_ITERATIONS,
   SYSTEM_PROMPT,
@@ -23,6 +25,15 @@ import {
   type Emit,
   type TurnUsage,
 } from "./types";
+
+const MODEL_LIST_TIMEOUT_MS = 10_000;
+const MAX_DISCOVERED_MODELS = 500;
+const MAX_MODEL_ID_LENGTH = 256;
+const MAX_OLLAMA_CAPABILITY_PROBES = 24;
+const OLLAMA_PROBE_CONCURRENCY = 4;
+const OLLAMA_PROBE_TIMEOUT_MS = 3_000;
+const MAX_OLLAMA_RESPONSE_BYTES = 64 * 1024;
+const MAX_MODEL_LIST_RESPONSE_BYTES = 1024 * 1024;
 
 export interface OpenAIProviderOptions {
   baseUrl: string;
@@ -68,31 +79,175 @@ function describeUsage(usage: OpenAI.CompletionUsage): TurnUsage {
  *
  * Best effort: any failure just yields no annotations.
  */
+export function ollamaProbeEndpoint(baseUrl: string): string | null {
+  try {
+    const url = new URL(baseUrl);
+    if (
+      (url.protocol !== "http:" && url.protocol !== "https:") ||
+      url.username ||
+      url.password ||
+      !isLoopbackHostname(url.hostname)
+    ) {
+      return null;
+    }
+    // /v1 is the OpenAI-compat prefix; /api/show lives at the server root.
+    return new URL("/api/show", url.origin).toString();
+  } catch {
+    return null;
+  }
+}
+
+function isNumericLoopbackUrl(baseUrl: string): boolean {
+  try {
+    const url = new URL(baseUrl);
+    return isLoopbackHostname(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
+export function normalizeOpenAIModelId(baseUrl: string, modelId: string): string {
+  return (isGeminiOpenAIEndpoint(baseUrl) ? modelId.replace(/^models\//, "") : modelId).trim();
+}
+
+function boundedModelIds(baseUrl: string, models: OpenAI.Models.Model[]): string[] {
+  const unique = new Set<string>();
+  for (const model of models) {
+    if (unique.size >= MAX_DISCOVERED_MODELS) break;
+    if (typeof model.id !== "string") continue;
+    // Gemini lists ids as "models/gemini-...", while its chat completions
+    // endpoint expects the bare id. Other compatible providers may use
+    // "models/" literally, so scope this workaround to Gemini's endpoint.
+    const id = normalizeOpenAIModelId(baseUrl, model.id);
+    if (!id || id.length > MAX_MODEL_ID_LENGTH || /[\u0000-\u001f\u007f]/.test(id)) continue;
+    unique.add(id);
+  }
+  return [...unique].sort((left, right) => left.localeCompare(right));
+}
+
+class ResponseSizeLimitError extends Error {
+  constructor(maxBytes: number) {
+    super(`Model discovery response exceeded the ${maxBytes}-byte limit.`);
+    this.name = "ResponseSizeLimitError";
+  }
+}
+
+/** A configured endpoint is the complete network trust boundary. Following a
+ * redirect could move prompts, tool results, or a loopback-only request to a
+ * host the user never selected. Reject redirects even though fetch normally
+ * strips Authorization on a cross-origin hop. */
+const redirectRejectingFetch: typeof fetch = (input, init) =>
+  globalThis.fetch(input, { ...init, redirect: "error" });
+
+/**
+ * The OpenAI SDK requires a non-empty apiKey option and synthesizes an
+ * Authorization header from it. Keyless connections still pass a harmless
+ * placeholder to satisfy that constructor, but this wrapper removes the
+ * resulting header at the final transport boundary. It also handles a Request
+ * object carrying headers of its own rather than assuming they live in init.
+ */
+function connectionFetch(apiKey: string, delegate: typeof fetch): typeof fetch {
+  if (apiKey.trim()) return delegate;
+  return (input, init) => {
+    const headers = new Headers(input instanceof Request ? input.headers : undefined);
+    new Headers(init?.headers).forEach((value, name) => headers.set(name, value));
+    headers.delete("authorization");
+    return delegate(input, { ...init, headers });
+  };
+}
+
+/**
+ * Wrap fetch so consumers cannot buffer an unbounded response before checking
+ * its size. The stream is cancelled as soon as either Content-Length or actual
+ * bytes cross the limit; chunked and compressed responses are counted as read.
+ * Model discovery shares the same no-redirect endpoint boundary as chat.
+ */
+function responseLimitedFetch(maxBytes: number): typeof fetch {
+  return async (input, init) => {
+    const response = await redirectRejectingFetch(input, init);
+    const declaredLength = Number(response.headers.get("content-length"));
+    if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
+      await response.body?.cancel();
+      throw new ResponseSizeLimitError(maxBytes);
+    }
+    if (!response.body) return response;
+
+    const reader = response.body.getReader();
+    let bytesRead = 0;
+    const body = new ReadableStream<Uint8Array>({
+      async pull(controller) {
+        try {
+          const chunk = await reader.read();
+          if (chunk.done) {
+            controller.close();
+            return;
+          }
+          bytesRead += chunk.value.byteLength;
+          if (bytesRead > maxBytes) {
+            await reader.cancel();
+            controller.error(new ResponseSizeLimitError(maxBytes));
+            return;
+          }
+          controller.enqueue(chunk.value);
+        } catch (error) {
+          controller.error(error);
+        }
+      },
+      cancel(reason) {
+        return reader.cancel(reason);
+      },
+    });
+
+    return new Response(body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: response.headers,
+    });
+  };
+}
+
 async function probeOllamaToolSupport(baseUrl: string, models: string[]): Promise<Record<string, boolean> | undefined> {
-  // /v1 is the OpenAI-compat prefix; /api/show lives at the server root.
-  const root = baseUrl.trim().replace(/\/+$/, "").replace(/\/v1$/, "");
-  if (!/localhost|127\.0\.0\.1/.test(root)) return undefined;
+  const endpoint = ollamaProbeEndpoint(baseUrl);
+  if (!endpoint) return undefined;
+
+  const targets = models.slice(0, MAX_OLLAMA_CAPABILITY_PROBES);
+  const entries: Array<readonly [string, boolean] | null> = Array(targets.length).fill(null);
+  let cursor = 0;
+  let endpointUnavailable = false;
 
   try {
-    const entries = await Promise.all(
-      models.map(async (model) => {
-        try {
-          const res = await fetch(`${root}/api/show`, {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ model }),
-            signal: AbortSignal.timeout(5000),
-          });
-          if (!res.ok) return null;
-          const body = (await res.json()) as { capabilities?: string[] };
-          if (!Array.isArray(body.capabilities)) return null;
-          return [model, body.capabilities.includes("tools")] as const;
-        } catch {
-          return null;
+    const workers = Array.from(
+      { length: Math.min(OLLAMA_PROBE_CONCURRENCY, targets.length) },
+      async () => {
+        while (!endpointUnavailable) {
+          const index = cursor++;
+          if (index >= targets.length) return;
+          const model = targets[index];
+          try {
+            const res = await responseLimitedFetch(MAX_OLLAMA_RESPONSE_BYTES)(endpoint, {
+              method: "POST",
+              headers: { accept: "application/json", "content-type": "application/json" },
+              body: JSON.stringify({ model }),
+              signal: AbortSignal.timeout(OLLAMA_PROBE_TIMEOUT_MS),
+            });
+            // A local OpenAI-compatible server need not be Ollama. Stop issuing
+            // probes as soon as it definitively lacks Ollama's endpoint.
+            if (res.status === 404 || res.status === 405) {
+              endpointUnavailable = true;
+              return;
+            }
+            if (!res.ok) continue;
+            const body = await res.json() as { capabilities?: unknown } | null;
+            if (!body || !Array.isArray(body.capabilities)) continue;
+            entries[index] = [model, body.capabilities.includes("tools")];
+          } catch {
+            // Capability detection is best effort and must not hide models.
+          }
         }
-      }),
+      },
     );
-    const known = entries.filter((e): e is readonly [string, boolean] => e !== null);
+    await Promise.all(workers);
+    const known = entries.filter((entry): entry is readonly [string, boolean] => entry !== null);
     return known.length > 0 ? Object.fromEntries(known) : undefined;
   } catch {
     return undefined;
@@ -105,22 +260,26 @@ export async function listModels(
 ): Promise<{ ok: boolean; models?: string[]; toolCapable?: Record<string, boolean>; error?: string }> {
   if (!baseUrl.trim()) return { ok: false, error: "No server URL set." };
   try {
-    const client = new OpenAI({ baseURL: baseUrl, apiKey: apiKey || "local" });
-    const page = await client.models.list();
-    const models = page.data
-      // Gemini's /models lists ids as "models/gemini-3.7-flash", but its
-      // chat-completions endpoint rejects that form and wants the bare id.
-      // Normalize here, at the point the id enters the app.
-      .map((m) => m.id.replace(/^models\//, ""))
-      .sort((a, b) => a.localeCompare(b));
+    const client = new OpenAI({
+      baseURL: baseUrl,
+      apiKey: apiKey || "local",
+      maxRetries: 0,
+      timeout: MODEL_LIST_TIMEOUT_MS,
+      fetch: connectionFetch(apiKey, responseLimitedFetch(MAX_MODEL_LIST_RESPONSE_BYTES)),
+    });
+    const page = await client.models.list({ signal: AbortSignal.timeout(MODEL_LIST_TIMEOUT_MS) });
+    const models = boundedModelIds(baseUrl, page.data);
     if (models.length === 0) return { ok: false, error: "The server returned no models." };
 
     return { ok: true, models, toolCapable: await probeOllamaToolSupport(baseUrl, models) };
   } catch (err) {
     if (err instanceof OpenAI.AuthenticationError) return { ok: false, error: "The provider rejected the API key." };
-    if (err instanceof OpenAI.APIConnectionError) return { ok: false, error: `Could not reach ${baseUrl}.` };
-    if (err instanceof OpenAI.APIError) return { ok: false, error: `${err.status}: ${err.message}` };
-    return { ok: false, error: (err as Error).message ?? String(err) };
+    if (err instanceof OpenAI.APIConnectionError) return { ok: false, error: "Could not reach the model provider." };
+    if (err instanceof OpenAI.APIError) return { ok: false, error: `The model provider returned HTTP ${err.status}.` };
+    if (err instanceof ResponseSizeLimitError) return { ok: false, error: err.message };
+    // Remote response bodies and nested SDK errors are deliberately not exposed:
+    // a hostile endpoint could reflect the Authorization header into its error.
+    return { ok: false, error: "Could not load models from the provider." };
   }
 }
 
@@ -139,7 +298,7 @@ export class OpenAICompatibleProvider implements ChatProvider {
       // Same "models/" normalization as listModels, applied again here so a
       // config already saved with the prefixed form heals itself instead of
       // failing every turn until someone re-picks the model.
-      model: options.model.replace(/^models\//, ""),
+      model: normalizeOpenAIModelId(options.baseUrl, options.model),
     };
   }
 
@@ -165,8 +324,10 @@ export class OpenAICompatibleProvider implements ChatProvider {
     this.cancelled = false;
     const client = new OpenAI({
       baseURL: this.options.baseUrl,
-      // Local servers ignore this, but the SDK requires something non-empty.
+      // The SDK requires something non-empty; connectionFetch strips the
+      // synthesized Authorization header for a genuinely keyless connection.
       apiKey: this.options.apiKey || "local",
+      fetch: connectionFetch(this.options.apiKey, redirectRejectingFetch),
     });
 
     const tools: OpenAI.Chat.ChatCompletionTool[] = allToolDefinitions().map((t) => ({
@@ -174,10 +335,14 @@ export class OpenAICompatibleProvider implements ChatProvider {
       function: { name: t.name, description: t.description, parameters: t.input_schema },
     }));
 
-    if (this.history.length === 0) {
-      this.history.push({ role: "system", content: SYSTEM_PROMPT });
-    }
-    this.history.push({ role: "user", content: userMessage });
+    // Build the turn against a private copy. A cancelled stream, failed API
+    // retry, or interrupted tool loop must not leave a dangling user message or
+    // an assistant tool call without all of its matching tool results in the
+    // durable conversation used by the next turn.
+    const turnHistory: OpenAI.Chat.ChatCompletionMessageParam[] = this.history.length === 0
+      ? [{ role: "system", content: SYSTEM_PROMPT }]
+      : [...this.history];
+    turnHistory.push({ role: "user", content: userMessage });
 
     try {
       for (let i = 0; i < MAX_ITERATIONS; i++) {
@@ -186,7 +351,7 @@ export class OpenAICompatibleProvider implements ChatProvider {
         this.controller = new AbortController();
         const body: OpenAI.Chat.ChatCompletionCreateParamsStreaming = {
           model: this.options.model,
-          messages: this.history,
+          messages: turnHistory,
           tools: tools.length > 0 ? tools : undefined,
           stream: true,
           // Ollama's OpenAI-compatible endpoint does NOT inherit the
@@ -266,7 +431,7 @@ export class OpenAICompatibleProvider implements ChatProvider {
           }))
           .filter((c) => c.name);
 
-        this.history.push({
+        turnHistory.push({
           role: "assistant",
           content: text || null,
           ...(calls.length > 0 && {
@@ -281,16 +446,23 @@ export class OpenAICompatibleProvider implements ChatProvider {
           }),
         } as OpenAI.Chat.ChatCompletionMessageParam);
 
-        if (calls.length === 0) return;
+        if (calls.length === 0) {
+          this.history = turnHistory;
+          return;
+        }
 
         for (const call of calls) {
           const { content } = await runToolCall(emit, call.id, call.name, parseToolArguments(call.args));
           if (this.cancelled) return;
           // The OpenAI format wants one tool message per call, each keyed by id —
           // unlike Anthropic, where all results share a single user message.
-          this.history.push({ role: "tool", tool_call_id: call.id, content });
+          turnHistory.push({ role: "tool", tool_call_id: call.id, content });
         }
       }
+
+      // Reaching the safety limit still leaves a complete assistant/tool-result
+      // exchange, so preserve the same follow-up behavior as before.
+      this.history = turnHistory;
     } catch (err) {
       if (!this.cancelled) emit({ type: "error", message: this.describeError(err) });
     } finally {
@@ -299,7 +471,7 @@ export class OpenAICompatibleProvider implements ChatProvider {
   }
 
   private describeError(err: unknown): string {
-    const isLocal = /localhost|127\.0\.0\.1/.test(this.options.baseUrl);
+    const isLocal = isNumericLoopbackUrl(this.options.baseUrl);
     if (err instanceof OpenAI.APIConnectionError) {
       return isLocal
         ? `Could not reach the model server at ${this.options.baseUrl}. Is it running? (For Ollama: \`ollama serve\`.)`
@@ -317,8 +489,8 @@ export class OpenAICompatibleProvider implements ChatProvider {
       return "Rate limited by the provider — free tiers cap requests per minute/day. Wait a moment and retry.";
     }
     if (err instanceof OpenAI.APIError) {
-      return `Model server error ${err.status}: ${err.message}`;
+      return `The model provider returned HTTP ${err.status}.`;
     }
-    return (err as Error).message ?? String(err);
+    return "The model request failed.";
   }
 }

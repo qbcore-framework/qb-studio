@@ -6,7 +6,7 @@ import { contextBridge, ipcRenderer, webUtils } from "electron";
 const api = {
   config: {
     get: () => ipcRenderer.invoke("config:get"),
-    set: (config: unknown) => ipcRenderer.invoke("config:set", config),
+    set: (config: unknown, credentialUpdates?: unknown) => ipcRenderer.invoke("config:set", config, credentialUpdates),
     onChanged: (callback: (config: unknown) => void) => {
       const listener = (_e: unknown, config: unknown) => callback(config);
       ipcRenderer.on("config:changed", listener);
@@ -36,8 +36,9 @@ const api = {
       ipcRenderer.on("console:revealSourceLocation", listener);
       return () => ipcRenderer.removeListener("console:revealSourceLocation", listener);
     },
-    onAgentFixPrompt: (callback: (prompt: string, workspaceScope: string) => void) => {
-      const listener = (_e: unknown, prompt: string, workspaceScope: string) => callback(prompt, workspaceScope);
+    onAgentFixPrompt: (callback: (prompt: string, workspaceScope: string, agentScope: string) => void) => {
+      const listener = (_e: unknown, prompt: string, workspaceScope: string, agentScope: string) =>
+        callback(prompt, workspaceScope, agentScope);
       ipcRenderer.on("console:agentFixPrompt", listener);
       return () => ipcRenderer.removeListener("console:agentFixPrompt", listener);
     },
@@ -205,12 +206,13 @@ const api = {
     },
   },
   agent: {
-    setApiKey: (key: string) => ipcRenderer.invoke("agent:setApiKey", key),
-    hasApiKey: () => ipcRenderer.invoke("agent:hasApiKey"),
-    setProviderKey: (baseUrl: string, key: string) => ipcRenderer.invoke("agent:setProviderKey", baseUrl, key),
-    hasProviderKey: (baseUrl: string) => ipcRenderer.invoke("agent:hasProviderKey", baseUrl),
-    listModels: (baseUrl: string, keyOverride?: string) => ipcRenderer.invoke("agent:listModels", baseUrl, keyOverride),
-    send: (message: string) => ipcRenderer.invoke("agent:send", message),
+    hasConnectionKey: (connectionId: string) => ipcRenderer.invoke("agent:hasConnectionKey", connectionId),
+    listConnectionModels: (connectionId: string) => ipcRenderer.invoke("agent:listConnectionModels", connectionId),
+    probeModels: (connection: { provider: "anthropic" | "openai"; baseUrl: string; requiresKey: boolean }, keyOverride?: string) =>
+      ipcRenderer.invoke("agent:probeModels", connection, keyOverride),
+    selectTarget: (connectionId: string, model: string) =>
+      ipcRenderer.invoke("agent:selectTarget", connectionId, model),
+    send: (message: string, expectedRuntimeScope: string) => ipcRenderer.invoke("agent:send", message, expectedRuntimeScope),
     cancel: () => ipcRenderer.invoke("agent:cancel"),
     respondToApproval: (approvalId: string, approved: boolean) =>
       ipcRenderer.invoke("agent:respondToApproval", approvalId, approved),

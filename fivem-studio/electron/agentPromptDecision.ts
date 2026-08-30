@@ -5,10 +5,12 @@ export interface AgentPromptEnvelope {
   text: string;
   mode: AgentPromptMode;
   workspaceScope: string;
+  /** Prevents an automatic prompt from crossing into a different provider/model. */
+  agentScope: string;
 }
 
 export type AgentAutoSubmitDecision = "send" | "pending" | "busy" | "unconfigured" | "empty";
-export type AgentPromptDispatchDecision = AgentAutoSubmitDecision | "workspace-mismatch";
+export type AgentPromptDispatchDecision = AgentAutoSubmitDecision | "workspace-mismatch" | "agent-mismatch";
 
 export function isUnconsumedAgentPrompt(lastConsumedId: number, nextId: number): boolean {
   return Number.isSafeInteger(nextId) && nextId > lastConsumedId;
@@ -25,24 +27,42 @@ export function agentPromptWorkspaceScope(txDataPath: string | null, selectedPro
   return JSON.stringify([txDataPath ?? "", selectedProfile ?? ""]);
 }
 
+export function agentPromptAgentScope(
+  connectionId: string,
+  model: string,
+  provider = "",
+  baseUrl = "",
+  credentialRevision = 0,
+  requiresKey: boolean | null = null,
+): string {
+  return JSON.stringify([connectionId, model, provider, baseUrl, credentialRevision, requiresKey]);
+}
+
 export function isAgentPromptForWorkspace(prompt: AgentPromptEnvelope, workspaceScope: string): boolean {
   return prompt.workspaceScope === workspaceScope;
+}
+
+export function isAgentPromptForAgent(prompt: AgentPromptEnvelope, agentScope: string): boolean {
+  return prompt.agentScope === agentScope;
 }
 
 export function decideAgentPromptDispatch({
   prompt,
   workspaceScope,
+  agentScope,
   ready,
   busy,
   sendLocked,
 }: {
   prompt: AgentPromptEnvelope;
   workspaceScope: string;
+  agentScope: string;
   ready: boolean | null;
   busy: boolean;
   sendLocked: boolean;
 }): AgentPromptDispatchDecision {
   if (!isAgentPromptForWorkspace(prompt, workspaceScope)) return "workspace-mismatch";
+  if (!isAgentPromptForAgent(prompt, agentScope)) return "agent-mismatch";
   return decideAgentAutoSubmit({ text: prompt.text, ready, busy, sendLocked });
 }
 

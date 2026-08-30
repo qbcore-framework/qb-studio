@@ -22,7 +22,7 @@ screenshots.
 - Opt-in, privacy-limited Discord Rich Presence that can be enabled in Settings
 - Built-in themes plus validated user JSON theme packs with instant Settings preview
 - GitHub repository and organization search with resource imports
-- AI assistant scoped to project files and coding-oriented runtime tools
+- AI assistant scoped to project files and coding-oriented runtime tools, with saved provider accounts and an in-chat model switcher
 - Bundled private runtime: no separate Node or MCP server to launch
 - User-controlled application updates with download progress and an explicit **Restart to update** step
 
@@ -133,6 +133,25 @@ folder, and a Cfx.re server license key.
 The private MCP runtime is bundled with the desktop app and starts on an
 ephemeral loopback port. “Coding runtime ready” means the workspace connection
 is ready; it does not mean FXServer itself is running.
+
+## Agent connections and models
+
+Agent Chat starts with Google Gemini selected, but it is not locked to one
+provider or account. In **Settings → Agent Chat**, save multiple named
+connections, keep a separate protected API key for each hosted connection, and
+add the models that connection should expose. Connections may point to the same
+service with different accounts, to different hosted providers, or to keyless
+local OpenAI-compatible runtimes such as Ollama and LM Studio. Keyless
+connections never store or send an API key.
+
+The Agent Chat header groups models by saved connection. Changing the selected
+connection or model starts a new chat instead of replaying one provider's
+private conversation format into another; an unsent draft is kept. The nearby
+settings control jumps directly to the connection editor, while New chat stays
+a direct action rather than implying that QB Studio persists chat history. API
+keys are write-only in the renderer, encrypted with the operating system's
+credential protection, and bound to both the saved connection and its endpoint.
+Editing an endpoint therefore cannot forward its old key to a new host.
 
 If resource controls are unavailable, verify the RCON password, restart
 FXServer after configuration changes, then save Settings again. If the console

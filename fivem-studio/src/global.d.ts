@@ -19,9 +19,54 @@ export interface StudioConfig {
   discordPresenceEnabled: boolean;
   agentSpendWarningUsd: number;
   editor: EditorPreferences;
-  agentProvider: "anthropic" | "openai";
-  openaiBaseUrl: string;
-  openaiModel: string;
+  agent: AgentSettings;
+}
+
+export type AgentProviderKind = "anthropic" | "openai";
+
+export interface AgentConnection {
+  /** Stable, opaque identity. Credentials are scoped to this id and endpoint. */
+  id: string;
+  label: string;
+  provider: AgentProviderKind;
+  /** Empty for Anthropic, which uses its native fixed endpoint. */
+  baseUrl: string;
+  /** Models the user chose to expose in the chat agent picker. */
+  models: string[];
+  /** False for keyless local runtimes such as Ollama and LM Studio. */
+  requiresKey: boolean;
+}
+
+export interface AgentTarget {
+  connectionId: string;
+  model: string;
+}
+
+export interface AgentCredentialUpdate {
+  connectionId: string;
+  /** Write-only: an empty value explicitly clears the saved credential. */
+  key: string;
+}
+
+export interface AgentSettings {
+  schemaVersion: 1;
+  connections: AgentConnection[];
+  active: AgentTarget;
+  /** Changes when a write-only credential changes so readiness is rechecked. */
+  credentialRevision: number;
+}
+
+export interface AgentModelListResult {
+  ok: boolean;
+  models?: string[];
+  toolCapable?: Record<string, boolean>;
+  error?: string;
+}
+
+export interface AgentConnectionProbe {
+  provider: AgentProviderKind;
+  baseUrl: string;
+  requiresKey: boolean;
 }
 
 export interface EditorPreferences {
@@ -287,6 +332,12 @@ export type AgentEvent =
   | { type: "done" }
   | { type: "error"; message: string };
 
+export interface AgentEventEnvelope {
+  conversationGeneration: number;
+  runtimeScope: string;
+  event: AgentEvent | null;
+}
+
 export interface AgentFilePreview {
   path: string;
   originalContent: string;
@@ -520,7 +571,7 @@ declare global {
     api: {
       config: {
         get(): Promise<StudioConfig>;
-        set(config: StudioConfig): Promise<StudioConfig>;
+        set(config: StudioConfig, credentialUpdates?: AgentCredentialUpdate[]): Promise<StudioConfig>;
         onChanged(callback: (config: StudioConfig) => void): () => void;
       };
       console: {
@@ -533,7 +584,7 @@ declare global {
         onRefreshIntervalChanged(callback: (intervalMs: number) => void): () => void;
         onClearViewChanged(callback: (generation: number) => void): () => void;
         onRevealSourceLocation(callback: (location: ResolvedConsoleSourceLocation) => void): () => void;
-        onAgentFixPrompt(callback: (prompt: string, workspaceScope: string) => void): () => void;
+        onAgentFixPrompt(callback: (prompt: string, workspaceScope: string, agentScope: string) => void): () => void;
       };
       theme: {
         system(): Promise<"dark" | "light">;
@@ -676,21 +727,17 @@ declare global {
         onStatus(callback: (status: { state: "stopped" | "error"; message?: string }) => void): () => void;
       };
       agent: {
-        setApiKey(key: string): Promise<void>;
-        hasApiKey(): Promise<boolean>;
-        setProviderKey(baseUrl: string, key: string): Promise<void>;
-        hasProviderKey(baseUrl: string): Promise<boolean>;
-        listModels(
-          baseUrl: string,
-          keyOverride?: string,
-        ): Promise<{ ok: boolean; models?: string[]; toolCapable?: Record<string, boolean>; error?: string }>;
-        send(message: string): Promise<void>;
+        hasConnectionKey(connectionId: string): Promise<boolean>;
+        listConnectionModels(connectionId: string): Promise<AgentModelListResult>;
+        probeModels(connection: AgentConnectionProbe, keyOverride?: string): Promise<AgentModelListResult>;
+        selectTarget(connectionId: string, model: string): Promise<StudioConfig>;
+        send(message: string, expectedRuntimeScope: string): Promise<void>;
         cancel(): Promise<void>;
         respondToApproval(approvalId: string, approved: boolean): Promise<{ ok: true }>;
-        reset(): Promise<void>;
+        reset(): Promise<number>;
         setEditorContext(context: EditorContext): Promise<void>;
         onFileWritten(callback: (absolutePath: string) => void): () => void;
-        onEvent(callback: (event: AgentEvent) => void): () => void;
+        onEvent(callback: (event: AgentEventEnvelope) => void): () => void;
       };
       shell: {
         openExternal(url: string): Promise<void>;

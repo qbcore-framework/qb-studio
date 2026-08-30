@@ -15,6 +15,7 @@ export default function WhatsNewPanel({ currentVersion, onClose }: { currentVers
             <li>{t("whatsNew.creationSafety")}</li>
             <li>{t("whatsNew.consoleSources")}</li>
             <li>{t("whatsNew.agentFix")}</li>
+            <li>{t("whatsNew.agentConnections")}</li>
           </ul>
           <div className="modal-actions">
             <button type="button" className="btn primary" onClick={onClose}>{t("whatsNew.continue")}</button>

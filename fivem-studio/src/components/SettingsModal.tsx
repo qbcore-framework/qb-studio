@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import type {
   AppUpdateState,
+  AgentCredentialUpdate,
+  AgentSettings,
   ArtifactProgress,
   ArtifactStatus,
   CfxTarget,
@@ -14,24 +16,33 @@ import type {
   ThemePreference,
 } from "../global";
 import { t } from "../i18n";
-import { COST_LABEL, PROVIDER_PRESETS, matchPreset } from "../providerPresets";
 import { useDialogFocus } from "../hooks/useDialogFocus";
+import { agentChatResetReasons } from "../../electron/agentTarget";
 import SetupChecklist from "./SetupChecklist";
 import AppUpdateControl from "./AppUpdateControl";
+import AgentConnectionsEditor, {
+  agentCredentialInputError,
+  agentSettingsFromConfig,
+  type ConnectionKeyStages,
+  validateAgentSettings,
+} from "./AgentConnectionsEditor";
 
 interface SettingsModalProps {
   config: StudioConfig;
   themePacks: ThemePack[];
   appUpdateState: AppUpdateState;
+  initialSection?: "top" | "agent";
   appUpdateBusy?: boolean;
   onCheckAppUpdate: () => void | Promise<void>;
   onDownloadAppUpdate: () => void | Promise<void>;
   onRestartAppUpdate: () => void | Promise<void>;
   onThemePreview: (preference: ThemePreference) => void;
   onReloadThemePacks: () => Promise<ThemePack[]>;
-  onSave: (config: StudioConfig) => Promise<void>;
+  onSave: (config: StudioConfig, credentialUpdates?: AgentCredentialUpdate[]) => Promise<void>;
   onClose: () => void;
 }
+
+type SettingsDraft = StudioConfig & { agent: AgentSettings };
 
 const CFX_TARGETS: readonly CfxTarget[] = ["legacy", "enhanced", "redm"];
 
@@ -57,6 +68,7 @@ export default function SettingsModal({
   config,
   themePacks,
   appUpdateState,
+  initialSection = "top",
   appUpdateBusy,
   onCheckAppUpdate,
   onDownloadAppUpdate,
@@ -66,21 +78,13 @@ export default function SettingsModal({
   onSave,
   onClose,
 }: SettingsModalProps) {
-  const [draft, setDraft] = useState<StudioConfig>(config);
+  const savedAgentSettings = agentSettingsFromConfig(config);
+  const [draft, setDraft] = useState<SettingsDraft>(() => ({ ...config, agent: savedAgentSettings }));
   const [busy, setBusy] = useState(false);
   const [profiles, setProfiles] = useState<ProfileInfo[]>([]);
   const [profilesError, setProfilesError] = useState<string | null>(null);
-  // The stored key is never readable from here — the main process only reports
-  // whether one exists. An empty box therefore means "leave whatever's saved
-  // alone", not "clear it"; clearing is an explicit button.
-  const [hasApiKey, setHasApiKey] = useState(false);
-  const [apiKeyDraft, setApiKeyDraft] = useState("");
-  const [hasLocalKey, setHasLocalKey] = useState(false);
-  const [localKeyDraft, setLocalKeyDraft] = useState("");
-  const [models, setModels] = useState<string[]>([]);
-  const [toolCapable, setToolCapable] = useState<Record<string, boolean> | undefined>();
-  const [loadingModels, setLoadingModels] = useState(false);
-  const [modelsError, setModelsError] = useState<string | null>(null);
+  const [connectionKeyStages, setConnectionKeyStages] = useState<ConnectionKeyStages>({});
+  const [agentModelsBusy, setAgentModelsBusy] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [workspaceName, setWorkspaceName] = useState("");
   const [workspacePort, setWorkspacePort] = useState("30120");
@@ -109,47 +113,6 @@ export default function SettingsModal({
       : { ...current, consoleRefreshIntervalMs: config.consoleRefreshIntervalMs });
   }, [config.consoleRefreshIntervalMs]);
 
-  /** Asks the endpoint what it actually serves, rather than making the user guess a model id. */
-  async function loadModels() {
-    setLoadingModels(true);
-    setModelsError(null);
-    try {
-      // Pass the typed key so this works before Save, when nothing is stored yet.
-      const result = await window.api.agent.listModels(draft.openaiBaseUrl, localKeyDraft.trim() || undefined);
-      if (result.ok && result.models) {
-        setModels(result.models);
-        setToolCapable(result.toolCapable);
-        // Nothing chosen yet, or the saved id isn't on this endpoint — pick a sane one.
-        // The preset's own recommendation wins over a keyword match, which would
-        // otherwise just take whatever sorted first (e.g. gemini-2.5 over 3.7).
-        // Where capabilities are known, never auto-pick a model that can't call tools.
-        if (!draft.openaiModel || !result.models.includes(draft.openaiModel)) {
-          const usable = result.toolCapable
-            ? result.models.filter((m) => result.toolCapable![m] !== false)
-            : result.models;
-          const pool = usable.length > 0 ? usable : result.models;
-          const preferred =
-            (preset.model && pool.includes(preset.model) ? preset.model : undefined) ??
-            pool.find((m) => /flash|instruct|coder/i.test(m)) ??
-            pool[0];
-          setDraft((d) => ({ ...d, openaiModel: preferred }));
-        }
-      } else {
-        setModels([]);
-        setToolCapable(undefined);
-        setModelsError(result.error ?? "Could not list models.");
-      }
-    } catch (err) {
-      setModels([]);
-      setToolCapable(undefined);
-      setModelsError((err as Error).message || "Could not list models.");
-    } finally {
-      setLoadingModels(false);
-    }
-  }
-
-  const preset = matchPreset(draft.agentProvider, draft.openaiBaseUrl);
-  const isAnthropic = draft.agentProvider === "anthropic";
   const activeTarget = draft.activeCfxTarget;
   const activeServerPath = serverExeFor(draft, activeTarget);
   const activeClientPath = clientExeFor(draft, activeTarget);
@@ -254,36 +217,6 @@ export default function SettingsModal({
     });
     return () => { cancelled = true; };
   }, [draft.txDataPath, draft.selectedProfile, activeTarget, activeClientPath, activeServerPath, diagnosticsEpoch]);
-
-  /** Picking a provider fills in its endpoint and a starting model; both stay editable. */
-  function applyPreset(id: string) {
-    const next = PROVIDER_PRESETS.find((p) => p.id === id);
-    if (!next) return;
-    if (next.id === "anthropic") {
-      setDraft((d) => ({ ...d, agentProvider: "anthropic" }));
-      return;
-    }
-    setDraft((d) => ({
-      ...d,
-      agentProvider: "openai",
-      // "Custom" keeps whatever's already typed rather than blanking it.
-      openaiBaseUrl: next.id === "custom" ? d.openaiBaseUrl : next.baseUrl,
-      openaiModel: next.id === "custom" ? d.openaiModel : next.model,
-    }));
-  }
-
-  useEffect(() => {
-    window.api.agent.hasApiKey().then(setHasApiKey);
-  }, []);
-
-  // Re-check per endpoint: keys are stored per provider, so switching the picker
-  // must not keep showing "a key is saved" from the previous one.
-  useEffect(() => {
-    setLocalKeyDraft("");
-    setModels([]);
-    setModelsError(null);
-    window.api.agent.hasProviderKey(draft.openaiBaseUrl).then(setHasLocalKey);
-  }, [draft.openaiBaseUrl]);
 
   useEffect(() => {
     if (!draft.txDataPath) {
@@ -473,32 +406,47 @@ export default function SettingsModal({
   }
 
   async function save() {
+    const agentErrors = validateAgentSettings(draft.agent);
+    if (agentErrors.length > 0) {
+      setSaveError(agentErrors.join(" "));
+      return;
+    }
+    for (const [connectionId, stage] of Object.entries(connectionKeyStages)) {
+      if (stage?.kind !== "replace") continue;
+      const keyError = agentCredentialInputError(stage.value);
+      if (keyError) {
+        const label = draft.agent.connections.find((connection) => connection.id === connectionId)?.label
+          ?? "Agent connection";
+        setSaveError(`${label}: ${keyError}`);
+        return;
+      }
+    }
+    const chatResetReasons = agentChatResetReasons(savedAgentSettings, draft.agent, connectionKeyStages);
+    if (chatResetReasons.length > 0 && !confirm(
+      "Save Agent Chat changes?\n\n" +
+      "This starts a new chat and clears the current transcript and usage. Your unsent draft will be kept.\n\n" +
+      `Changes that reset chat:\n${chatResetReasons.map((reason) => `• ${reason}`).join("\n")}`,
+    )) return;
     setBusy(true);
     setSaveError(null);
     try {
-      // Profile-switch confirmation and main-process validation must succeed
-      // before any write-only credentials are changed.
-      await onSave(draft);
-      if (apiKeyDraft.trim()) await window.api.agent.setApiKey(apiKeyDraft.trim());
-      if (localKeyDraft.trim()) await window.api.agent.setProviderKey(draft.openaiBaseUrl, localKeyDraft.trim());
+      const credentialUpdates: AgentCredentialUpdate[] = Object.entries(connectionKeyStages)
+        .flatMap(([connectionId, stage]) => {
+          if (!stage) return [];
+          const key = stage.kind === "replace" ? stage.value : "";
+          return [{ connectionId, key }];
+        });
+      // Config, endpoint retirement, and every staged key are committed by one
+      // main-process filesystem transaction. A failed key write cannot leave a
+      // half-saved provider/account setup behind.
+      await onSave(draft, credentialUpdates);
+      setConnectionKeyStages({});
       onClose();
     } catch (err) {
       setSaveError((err as Error).message || "Could not save settings.");
     } finally {
       setBusy(false);
     }
-  }
-
-  async function clearApiKey() {
-    await window.api.agent.setApiKey("");
-    setHasApiKey(false);
-    setApiKeyDraft("");
-  }
-
-  async function clearLocalApiKey() {
-    await window.api.agent.setProviderKey(draft.openaiBaseUrl, "");
-    setHasLocalKey(false);
-    setLocalKeyDraft("");
   }
 
   async function importThemePack() {
@@ -531,12 +479,11 @@ export default function SettingsModal({
   }
 
   const operationBusy = busy || creatingWorkspace || artifactBusy !== null || detectingExecutable !== null
-    || loadingModels || themeBusy !== null || rconBusy;
+    || agentModelsBusy || themeBusy !== null || rconBusy;
   const restartBlockedReason = operationBusy
     ? t("appUpdate.restartBlockedOperation")
     : JSON.stringify(draft) !== JSON.stringify(config)
-      || apiKeyDraft.trim() !== ""
-      || localKeyDraft.trim() !== ""
+      || Object.keys(connectionKeyStages).length > 0
       || workspaceName.trim() !== ""
       || workspacePort !== "30120"
       || rconPreview !== null
@@ -551,7 +498,7 @@ export default function SettingsModal({
   return (
     <div className="modal-backdrop" onClick={() => !operationBusy && onClose()}>
       <div ref={dialogRef} className="modal settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title" tabIndex={-1} onClick={(e) => e.stopPropagation()}>
-        <h3 id="settings-title" data-dialog-initial-focus tabIndex={-1}>Settings</h3>
+        <h3 id="settings-title" data-dialog-initial-focus={initialSection === "top" ? true : undefined} tabIndex={-1}>Settings</h3>
 
         {saveError && <div id="settings-save-error" className="error-text settings-save-error" role="alert" tabIndex={-1}>{saveError}</div>}
 
@@ -1059,7 +1006,14 @@ export default function SettingsModal({
         </div>
         <div className="field-hint">{t("editor.restartAfterSaveHelp")}</div>
 
-        <div className="settings-divider">Agent Chat</div>
+        <div
+          id="settings-agent-chat-section"
+          className="settings-divider"
+          data-dialog-initial-focus={initialSection === "agent" ? true : undefined}
+          tabIndex={-1}
+        >
+          Agent Chat
+        </div>
 
         <label className="field-label">{t("agent.spendWarning")}</label>
         <select
@@ -1073,33 +1027,6 @@ export default function SettingsModal({
         </select>
         <div className="field-hint">{t("agent.spendWarning.help")}</div>
 
-        <label className="field-label">Provider</label>
-        <div style={{ marginBottom: 6 }}>
-          <select value={preset.id} onChange={(e) => applyPreset(e.target.value)}>
-            {PROVIDER_PRESETS.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.label} — {COST_LABEL[p.cost]}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="field-hint">
-          {preset.note}
-          {preset.keyUrl && (
-            <>
-              {" "}
-              <a
-                href={preset.keyUrl}
-                onClick={(e) => {
-                  e.preventDefault();
-                  window.api.shell.openExternal(preset.keyUrl!);
-                }}
-              >
-                Get a key
-              </a>
-            </>
-          )}
-        </div>
         <div className="field-hint">
           <strong>The model must support tool calling.</strong> The agent works entirely through tools, so a model
           without solid tool support will connect fine and then just chat without ever touching your server.
@@ -1107,96 +1034,15 @@ export default function SettingsModal({
         <div className="field-hint">
           Hosted providers receive your messages, selected code, and tool results. Choose Ollama or LM Studio if model traffic must stay on this PC.
         </div>
-
-        {isAnthropic ? (
-          <>
-            <label className="field-label">Anthropic API key{hasApiKey ? " — a key is saved" : ""}</label>
-            <div className="field-row">
-              <input
-                value={apiKeyDraft}
-                onChange={(e) => setApiKeyDraft(e.target.value)}
-                type="password"
-                placeholder={hasApiKey ? "Saved — type here to replace it" : "sk-ant-…"}
-              />
-              {hasApiKey && (
-                <button className="btn" onClick={clearApiKey}>
-                  Clear
-                </button>
-              )}
-            </div>
-          </>
-        ) : (
-          <>
-            <label className="field-label">Server URL</label>
-            <input
-              value={draft.openaiBaseUrl}
-              onChange={(e) => setDraft((d) => ({ ...d, openaiBaseUrl: e.target.value }))}
-              placeholder="https://…/v1"
-            />
-
-            <label className="field-label">Model</label>
-            <div className="field-row">
-              <input
-                value={draft.openaiModel}
-                onChange={(e) => setDraft((d) => ({ ...d, openaiModel: e.target.value }))}
-                placeholder="model id"
-                list="model-suggestions"
-              />
-              <button className="btn" onClick={loadModels} disabled={loadingModels}>
-                {loadingModels ? "Loading…" : "Load models"}
-              </button>
-            </div>
-            {models.length > 0 && (
-              <datalist id="model-suggestions">
-                {models.map((m) => (
-                  <option key={m} value={m} />
-                ))}
-              </datalist>
-            )}
-            {modelsError && <div className="error-text">{modelsError}</div>}
-            {models.length > 0 && (
-              <div className="field-hint">
-                {models.length} model{models.length === 1 ? "" : "s"} available — click the field for the list.
-                {toolCapable && (() => {
-                  const noTools = models.filter((m) => toolCapable[m] === false);
-                  return noTools.length === 0 ? null : (
-                    <>
-                      <br />
-                      <span style={{ color: "var(--yellow)" }}>
-                        No tool support (unusable for the agent): {noTools.join(", ")}
-                      </span>
-                    </>
-                  );
-                })()}
-              </div>
-            )}
-            {toolCapable?.[draft.openaiModel] === false && (
-              <div className="error-text">
-                “{draft.openaiModel}” doesn't support tool calling — the agent won't be able to do anything with it.
-              </div>
-            )}
-
-            <label className="field-label">
-              API key{preset.needsKey ? "" : " — not needed for a local server"}
-              {hasLocalKey ? " (a key is saved)" : ""}
-            </label>
-            <div className="field-row">
-              <input
-                value={localKeyDraft}
-                onChange={(e) => setLocalKeyDraft(e.target.value)}
-                type="password"
-                placeholder={
-                  hasLocalKey ? "Saved — type here to replace it" : preset.needsKey ? "Paste your key" : "Leave blank"
-                }
-              />
-              {hasLocalKey && (
-                <button className="btn" onClick={clearLocalApiKey}>
-                  Clear
-                </button>
-              )}
-            </div>
-          </>
-        )}
+        <AgentConnectionsEditor
+          value={draft.agent}
+          savedValue={savedAgentSettings}
+          keyStages={connectionKeyStages}
+          disabled={operationBusy}
+          onChange={(agent) => setDraft((current) => ({ ...current, agent }))}
+          onKeyStagesChange={setConnectionKeyStages}
+          onBusyChange={setAgentModelsBusy}
+        />
 
         <div className="modal-actions">
           <button className="btn" onClick={onClose} disabled={operationBusy}>

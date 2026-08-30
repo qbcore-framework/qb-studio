@@ -16,12 +16,15 @@ import { lastConsoleLines } from "./consoleText";
 import { activateTheme } from "./theme";
 import { PerPathSaveQueue, reconcileSuccessfulSave } from "../electron/editorSaveReconciliation";
 import {
+  agentPromptAgentScope,
   agentPromptWorkspaceScope,
   consumeAgentPromptEnvelope,
   type AgentPromptEnvelope,
   type AgentPromptMode,
 } from "../electron/agentPromptDecision";
 import type {
+  AgentCredentialUpdate,
+  AgentTarget,
   AppUpdateState,
   CfxTarget,
   CrashTriageContext,
@@ -90,9 +93,19 @@ const DEFAULT_CONFIG: StudioConfig = {
     restartResourceOnSave: false,
     luaIntelligence: "balanced",
   },
-  agentProvider: "openai",
-  openaiBaseUrl: "https://generativelanguage.googleapis.com/v1beta/openai/",
-  openaiModel: "gemini-3.7-flash",
+  agent: {
+    schemaVersion: 1,
+    connections: [{
+      id: "google-gemini-default",
+      label: "Google Gemini",
+      provider: "openai",
+      baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai/",
+      models: ["gemini-3.7-flash"],
+      requiresKey: true,
+    }],
+    active: { connectionId: "google-gemini-default", model: "gemini-3.7-flash" },
+    credentialRevision: 0,
+  },
 };
 
 const EMPTY_PROFILE: ResolvedProfile = { profileRoot: "", resourcesPath: null, serverCfgPath: null };
@@ -131,6 +144,7 @@ export default function App() {
   const [themePacks, setThemePacks] = useState<ThemePack[]>([]);
   const [themePreview, setThemePreview] = useState<ThemePreference | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsInitialSection, setSettingsInitialSection] = useState<"top" | "agent">("top");
   const [connected, setConnected] = useState(false);
   const [configLoaded, setConfigLoaded] = useState(false);
   const [recentWorkspaces, setRecentWorkspaces] = useState<RecentWorkspaceSummary[]>([]);
@@ -157,18 +171,37 @@ export default function App() {
   const latestConsoleOutput = useRef("");
   const [crashTriage, setCrashTriage] = useState<CrashTriageContext | null>(null);
   const currentAgentPromptScope = agentPromptWorkspaceScope(config.txDataPath, config.selectedProfile);
+  const currentAgentConnection = config.agent.connections.find(
+    (connection) => connection.id === config.agent.active.connectionId,
+  ) ?? config.agent.connections[0];
+  const currentAgentTargetScope = agentPromptAgentScope(
+    config.agent.active.connectionId,
+    config.agent.active.model,
+    currentAgentConnection?.provider,
+    currentAgentConnection?.baseUrl,
+    config.agent.credentialRevision,
+    currentAgentConnection?.requiresKey ?? null,
+  );
   const agentPromptScopeRef = useRef(currentAgentPromptScope);
+  const agentTargetScopeRef = useRef(currentAgentTargetScope);
   agentPromptScopeRef.current = currentAgentPromptScope;
+  agentTargetScopeRef.current = currentAgentTargetScope;
   const agentPromptSequence = useRef(0);
   const [agentPrompt, setAgentPrompt] = useState<AgentPromptEnvelope | null>(null);
   const [assistantActive, setAssistantActive] = useState(false);
 
-  const offerAgentPrompt = useCallback((text: string, mode: AgentPromptMode, workspaceScope = agentPromptScopeRef.current) => {
+  const offerAgentPrompt = useCallback((
+    text: string,
+    mode: AgentPromptMode,
+    workspaceScope = agentPromptScopeRef.current,
+    agentScope = agentTargetScopeRef.current,
+  ) => {
     setAgentPrompt({
       id: ++agentPromptSequence.current,
       text,
       mode,
       workspaceScope,
+      agentScope,
     });
   }, []);
   const consumeAgentPrompt = useCallback((id: number) => {
@@ -176,6 +209,9 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    // Workspace changes invalidate prepared code context entirely. Agent
+    // changes are handled in ChatPanel, which safely downgrades an automatic
+    // submission to an unsent draft rather than leaking it across providers.
     setAgentPrompt((current) => current?.workspaceScope === currentAgentPromptScope ? current : null);
   }, [currentAgentPromptScope]);
 
@@ -311,6 +347,13 @@ export default function App() {
       });
   }, [connect]);
 
+  // Main-process-only changes such as write-only credential updates increment
+  // the public agent revision without exposing the key. Keep readiness and the
+  // chat selector in sync with those broadcasts as well as ordinary Settings saves.
+  useEffect(() => window.api.config.onChanged((saved) => {
+    setConfig(saved);
+  }), []);
+
   useEffect(() => window.api.console.onRefreshIntervalChanged((consoleRefreshIntervalMs) => {
     setConfig((current) => ({ ...current, consoleRefreshIntervalMs }));
   }), []);
@@ -319,8 +362,8 @@ export default function App() {
     void openEditorLocationRef.current(location.path, location.line, location.column);
   }), []);
 
-  useEffect(() => window.api.console.onAgentFixPrompt((prompt, workspaceScope) => {
-    offerAgentPrompt(prompt, "submit", workspaceScope);
+  useEffect(() => window.api.console.onAgentFixPrompt((prompt, workspaceScope, agentScope) => {
+    offerAgentPrompt(prompt, "submit", workspaceScope, agentScope);
   }), [offerAgentPrompt]);
 
   const reloadThemePacks = useCallback(async () => {
@@ -353,6 +396,13 @@ export default function App() {
 
   const openSettings = useCallback(() => {
     setThemePreview(null);
+    setSettingsInitialSection("top");
+    setSettingsOpen(true);
+  }, []);
+
+  const openAgentSettings = useCallback(() => {
+    setThemePreview(null);
+    setSettingsInitialSection("agent");
     setSettingsOpen(true);
   }, []);
 
@@ -843,7 +893,7 @@ export default function App() {
     });
   }, [updateOpenFiles]);
 
-  async function handleSaveSettings(next: StudioConfig) {
+  async function handleSaveSettings(next: StudioConfig, credentialUpdates: AgentCredentialUpdate[] = []) {
     const profileChanged = next.txDataPath !== config.txDataPath || next.selectedProfile !== config.selectedProfile;
     const dirtyCount = openFiles.filter((file) => file.dirty).length;
     if (
@@ -855,7 +905,7 @@ export default function App() {
     ) {
       throw new Error("Profile switch cancelled; your unsaved editor tabs are still open.");
     }
-    const saved = await window.api.config.set(next);
+    const saved = await window.api.config.set(next, credentialUpdates);
     if (
       saved.activeCfxTarget !== config.activeCfxTarget ||
       saved.legacyFxServerExePath !== config.legacyFxServerExePath ||
@@ -889,6 +939,11 @@ export default function App() {
       setWorkspaceMatch(null);
       setConnectError(null);
     }
+  }
+
+  async function handleSelectAgentTarget(target: AgentTarget) {
+    const saved = await window.api.agent.selectTarget(target.connectionId, target.model);
+    setConfig(saved);
   }
 
   async function handleConsoleRefreshIntervalChange(intervalMs: number) {
@@ -1611,6 +1666,8 @@ export default function App() {
               activePath={activePath}
               activeResourceName={activeResourceContext?.name ?? null}
               onActivityChange={setAssistantActive}
+              onSelectAgentTarget={handleSelectAgentTarget}
+              onOpenAgentSettings={openAgentSettings}
             />
           </Panel>
         </Group>
@@ -1631,6 +1688,7 @@ export default function App() {
           themePacks={themePacks}
           appUpdateState={appUpdateState ?? LOADING_APP_UPDATE_STATE}
           appUpdateBusy={appUpdateBusy}
+          initialSection={settingsInitialSection}
           onCheckAppUpdate={checkForAppUpdate}
           onDownloadAppUpdate={downloadAppUpdate}
           onRestartAppUpdate={restartToAppUpdate}

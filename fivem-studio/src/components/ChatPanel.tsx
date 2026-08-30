@@ -1,15 +1,31 @@
 import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { languageForPath } from "../editorLanguage";
-import type { AgentEvent, AgentFilePreview, ResolvedTheme, RuntimeWorkspaceMatch, StudioConfig, TurnUsage } from "../global";
+import type { AgentEvent, AgentFilePreview, AgentTarget, ResolvedTheme, RuntimeWorkspaceMatch, StudioConfig, TurnUsage } from "../global";
 import { matchPreset } from "../providerPresets";
 import { t } from "../i18n";
 import {
+  agentPromptAgentScope,
   agentPromptWorkspaceScope,
   decideAgentPromptDispatch,
+  isAgentPromptForAgent,
   isAgentPromptForWorkspace,
   isUnconsumedAgentPrompt,
   type AgentPromptEnvelope,
 } from "../../electron/agentPromptDecision";
+import {
+  agentTargetKey,
+  agentTargetLabel,
+  canStartAgentSend,
+  decideAgentTargetSwitch,
+  parseAgentTargetKey,
+} from "../../electron/agentTarget";
+import {
+  acceptAgentEvent,
+  agentEventCursor,
+  agentEventRuntimeScope,
+  switchAgentEventCursor,
+  type AgentEventCursor,
+} from "../../electron/agentEventScope";
 
 const ChangeDiff = lazy(() => import("./ChangeDiff"));
 
@@ -107,6 +123,8 @@ interface ChatPanelProps {
   activePath: string | null;
   activeResourceName: string | null;
   onActivityChange: (active: boolean) => void;
+  onSelectAgentTarget: (target: AgentTarget) => Promise<void>;
+  onOpenAgentSettings: () => void;
 }
 
 export default function ChatPanel({
@@ -120,16 +138,40 @@ export default function ChatPanel({
   activePath,
   activeResourceName,
   onActivityChange,
+  onSelectAgentTarget,
+  onOpenAgentSettings,
 }: ChatPanelProps) {
-  const isAnthropic = config.agentProvider === "anthropic";
-  const preset = matchPreset(config.agentProvider, config.openaiBaseUrl);
+  const activeTarget = config.agent.active;
+  const activeConnection = config.agent.connections.find((connection) => connection.id === activeTarget.connectionId)
+    ?? config.agent.connections[0];
+  const isAnthropic = activeConnection?.provider === "anthropic";
+  const preset = matchPreset(activeConnection?.provider ?? "openai", activeConnection?.baseUrl ?? "");
+  const agentScope = agentPromptAgentScope(
+    activeTarget.connectionId,
+    activeTarget.model,
+    activeConnection?.provider,
+    activeConnection?.baseUrl,
+    config.agent.credentialRevision,
+    activeConnection?.requiresKey ?? null,
+  );
   const readinessScope = JSON.stringify([
-    config.agentProvider,
-    config.openaiBaseUrl,
-    config.openaiModel,
-    preset.needsKey,
+    activeConnection?.id ?? "",
+    activeConnection?.provider ?? "",
+    activeConnection?.baseUrl ?? "",
+    activeTarget.model,
+    activeConnection?.requiresKey ?? true,
+    config.agent.credentialRevision,
+  ]);
+  const runtimeScope = JSON.stringify([
+    activeConnection?.id ?? "",
+    activeConnection?.provider ?? "",
+    activeConnection?.baseUrl ?? "",
+    activeTarget.model,
+    activeConnection?.requiresKey ?? true,
+    config.agent.credentialRevision,
   ]);
   const workspaceScope = agentPromptWorkspaceScope(config.txDataPath, config.selectedProfile);
+  const eventRuntimeScope = agentEventRuntimeScope(workspaceScope, agentScope);
   const [entries, setEntries] = useState<Entry[]>([]);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
@@ -142,6 +184,8 @@ export default function ChatPanel({
   const [spendWarningDismissed, setSpendWarningDismissed] = useState(false);
   const [promptNotice, setPromptNotice] = useState<{ message: string; urgent: boolean } | null>(null);
   const [turnCompletion, setTurnCompletion] = useState(0);
+  const [switchingTarget, setSwitchingTarget] = useState(false);
+  const [resettingChat, setResettingChat] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const followOutputRef = useRef(true);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -150,38 +194,67 @@ export default function ChatPanel({
   const sendSequenceRef = useRef(0);
   const busyRef = useRef(busy);
   const readyRef = useRef(ready);
+  const switchingTargetRef = useRef(switchingTarget);
+  const resettingChatRef = useRef(resettingChat);
+  const pendingTargetKeyRef = useRef<string | null>(null);
   const consumedPromptIdRef = useRef(0);
+  const previousRuntimeScopeRef = useRef(runtimeScope);
+  const eventRuntimeScopeRef = useRef(eventRuntimeScope);
+  const eventCursorRef = useRef<AgentEventCursor>(agentEventCursor(eventRuntimeScope));
+
+  // Ref updates happen during render so an event queued behind a config change
+  // cannot slip through before the transcript-clearing effect runs.
+  if (eventCursorRef.current.runtimeScope !== eventRuntimeScope) {
+    eventCursorRef.current = switchAgentEventCursor(eventCursorRef.current, eventRuntimeScope);
+  }
 
   busyRef.current = busy;
   readyRef.current = ready;
+  switchingTargetRef.current = switchingTarget;
+  resettingChatRef.current = resettingChat;
+  eventRuntimeScopeRef.current = eventRuntimeScope;
 
-  const backendLabel = isAnthropic ? "Claude" : `${config.openaiModel || "?"} via ${preset.label}`;
+  useEffect(() => {
+    const pending = pendingTargetKeyRef.current;
+    if (!pending || pending !== agentTargetKey(activeTarget)) return;
+    pendingTargetKeyRef.current = null;
+    switchingTargetRef.current = false;
+    setSwitchingTarget(false);
+  }, [activeTarget.connectionId, activeTarget.model]);
 
-  // A purely local backend needs no credential, so readiness differs by provider.
+  const backendLabel = agentTargetLabel(activeTarget, config.agent.connections);
+
+  // A keyless backend needs no credential, while every keyed connection has
+  // its own write-only secret even when two accounts share an endpoint.
   useEffect(() => {
     let cancelled = false;
     const applyReady = (value: boolean) => {
       if (!cancelled) setReadiness({ scope: readinessScope, value });
     };
-    if (isAnthropic) {
-      setReadiness({ scope: readinessScope, value: null });
-      void window.api.agent.hasApiKey().then(applyReady).catch(() => applyReady(false));
-      return () => { cancelled = true; };
-    }
-    const configured = Boolean(config.openaiBaseUrl && config.openaiModel);
-    if (!configured || !preset.needsKey) {
+    const configured = Boolean(
+      activeConnection
+      && activeTarget.model
+      && activeConnection.models.includes(activeTarget.model)
+      && (activeConnection.provider === "anthropic" || activeConnection.baseUrl),
+    );
+    if (!configured || !activeConnection?.requiresKey) {
       setReadiness({ scope: readinessScope, value: configured });
       return () => { cancelled = true; };
     }
     setReadiness({ scope: readinessScope, value: null });
-    void window.api.agent.hasProviderKey(config.openaiBaseUrl)
+    void window.api.agent.hasConnectionKey(activeConnection.id)
       .then((has) => applyReady(configured && has))
       .catch(() => applyReady(false));
     return () => { cancelled = true; };
-  }, [readinessScope, isAnthropic, config.openaiBaseUrl, config.openaiModel, preset.needsKey]);
+  }, [readinessScope, activeConnection, activeTarget.model]);
 
   useEffect(() => {
-    return window.api.agent.onEvent((event: AgentEvent) => {
+    return window.api.agent.onEvent((value: unknown) => {
+      const accepted = acceptAgentEvent(value, eventCursorRef.current);
+      if (!accepted) return;
+      eventCursorRef.current = accepted.cursor;
+      const event = accepted.event;
+      if (!event) return;
       // Usage is a running tally rather than a transcript entry, so it's kept
       // out of the entries list entirely.
       if (event.type === "usage") {
@@ -194,6 +267,19 @@ export default function ChatPanel({
       setEntries((prev) => applyEvent(prev, event));
     });
   }, []);
+
+  // Main starts a fresh native provider session for every runtime identity.
+  // Mirror that boundary in the visible transcript while preserving anything
+  // the user has typed but not sent.
+  useEffect(() => {
+    if (previousRuntimeScopeRef.current === runtimeScope) return;
+    previousRuntimeScopeRef.current = runtimeScope;
+    setEntries([]);
+    setUsage(null);
+    setTurnCompletion(0);
+    setSpendWarningDismissed(false);
+    setPromptNotice({ message: `Now using ${backendLabel}. A new chat was started.`, urgent: false });
+  }, [runtimeScope, backendLabel]);
 
   // Follow streaming output only while the reader is already near the end.
   // Content growth does not itself fire scroll, so this remains true across
@@ -216,13 +302,26 @@ export default function ChatPanel({
       consumedPromptIdRef.current = suggestedPrompt.id;
       onSuggestedPromptConsumed(suggestedPrompt.id);
       setDraft(suggestedPrompt.text);
+      if (!isAgentPromptForAgent(suggestedPrompt, agentScope)) {
+        setPromptNotice({ message: "The agent changed, so the prepared request was kept as a draft instead of being sent.", urgent: false });
+      }
       inputRef.current?.focus();
+      return;
+    }
+
+    // A prepared automatic request remains unconsumed while native chat state
+    // is changing. Once the transition lands this effect runs again: a target
+    // mismatch is safely retained as a draft instead of being lost to a send
+    // guard that correctly refuses the in-flight transition.
+    if (switchingTargetRef.current || resettingChatRef.current) {
+      setPromptNotice({ message: t("agent.autoSubmit.checking"), urgent: false });
       return;
     }
 
     const decision = decideAgentPromptDispatch({
       prompt: suggestedPrompt,
       workspaceScope,
+      agentScope,
       ready: readyRef.current,
       busy: busyRef.current,
       sendLocked: sendLockRef.current,
@@ -235,6 +334,17 @@ export default function ChatPanel({
       consumedPromptIdRef.current = suggestedPrompt.id;
       onSuggestedPromptConsumed(suggestedPrompt.id);
       setPromptNotice(null);
+      return;
+    }
+    if (decision === "agent-mismatch") {
+      consumedPromptIdRef.current = suggestedPrompt.id;
+      onSuggestedPromptConsumed(suggestedPrompt.id);
+      setDraft(suggestedPrompt.text);
+      setPromptNotice({
+        message: "The agent changed, so the prepared request was kept as a draft instead of being sent.",
+        urgent: false,
+      });
+      inputRef.current?.focus();
       return;
     }
 
@@ -262,7 +372,7 @@ export default function ChatPanel({
     consumedPromptIdRef.current = suggestedPrompt.id;
     onSuggestedPromptConsumed(suggestedPrompt.id);
     if (!accepted) setPromptNotice({ message: t("agent.autoSubmit.busy"), urgent: true });
-  }, [suggestedPrompt, onSuggestedPromptConsumed, ready, workspaceScope]);
+  }, [suggestedPrompt, onSuggestedPromptConsumed, ready, workspaceScope, agentScope, switchingTarget, resettingChat]);
 
   useEffect(() => setSpendWarningDismissed(false), [config.agentSpendWarningUsd]);
 
@@ -337,7 +447,13 @@ export default function ChatPanel({
 
   function startSend(message: string, clearDraft: boolean): boolean {
     const text = message.trim();
-    if (!text || busyRef.current || sendLockRef.current) return false;
+    if (!canStartAgentSend({
+      message,
+      ready: readyRef.current,
+      busy: busyRef.current,
+      switchingTarget: switchingTargetRef.current || resettingChatRef.current,
+      sendLocked: sendLockRef.current,
+    })) return false;
     const sendId = ++sendSequenceRef.current;
     activeSendIdRef.current = sendId;
     sendLockRef.current = true;
@@ -347,8 +463,9 @@ export default function ChatPanel({
     if (clearDraft) setDraft("");
     setBusy(true);
     void Promise.resolve()
-      .then(() => window.api.agent.send(text))
+      .then(() => window.api.agent.send(text, eventRuntimeScope))
       .catch((err) => {
+        if (clearDraft) setDraft((current) => current === "" ? message : current);
         setEntries((prev) => [...prev, { kind: "error", text: (err as Error).message || "Could not send the message." }]);
       })
       .finally(() => {
@@ -366,20 +483,77 @@ export default function ChatPanel({
   }
 
   async function newChat() {
+    if (busyRef.current || switchingTargetRef.current || resettingChatRef.current) return;
+    const requestedRuntimeScope = eventRuntimeScopeRef.current;
+    resettingChatRef.current = true;
+    setResettingChat(true);
+    setPromptNotice(null);
     try {
-      await window.api.agent.reset();
+      const generation: unknown = await window.api.agent.reset();
+      if (eventRuntimeScopeRef.current !== requestedRuntimeScope) {
+        setPromptNotice({
+          message: "The workspace or agent changed while the new chat was starting, so its stale reset result was ignored.",
+          urgent: false,
+        });
+        return;
+      }
+      eventCursorRef.current = agentEventCursor(requestedRuntimeScope, generation);
       setEntries([]);
       setUsage(null);
       setTurnCompletion(0);
       setSpendWarningDismissed(false);
     } catch (err) {
       setEntries((prev) => [...prev, { kind: "error", text: (err as Error).message || "Could not start a new chat." }]);
+    } finally {
+      resettingChatRef.current = false;
+      setResettingChat(false);
+    }
+  }
+
+  async function changeAgentTarget(value: string) {
+    if (switchingTargetRef.current || resettingChatRef.current) return;
+    const next = parseAgentTargetKey(value, config.agent.connections);
+    if (!next) {
+      setEntries((prev) => [...prev, { kind: "error", text: "That agent or model is no longer configured." }]);
+      return;
+    }
+    const decision = decideAgentTargetSwitch({
+      current: activeTarget,
+      next,
+      busy: busyRef.current,
+      hasTranscript: entries.length > 0 || usage !== null,
+    });
+    if (decision === "no-op") return;
+    if (decision === "blocked-busy") {
+      setPromptNotice({ message: "Stop the current response before switching agents.", urgent: true });
+      return;
+    }
+    if (decision === "confirm") {
+      const from = agentTargetLabel(activeTarget, config.agent.connections);
+      const to = agentTargetLabel(next, config.agent.connections);
+      if (!confirm(
+        `Switch from ${from} to ${to}?\n\n` +
+        "Switching starts a new chat and clears this transcript and usage. Your unsent draft will be kept.",
+      )) return;
+    }
+
+    switchingTargetRef.current = true;
+    pendingTargetKeyRef.current = agentTargetKey(next);
+    setSwitchingTarget(true);
+    setPromptNotice(null);
+    try {
+      await onSelectAgentTarget(next);
+    } catch (err) {
+      pendingTargetKeyRef.current = null;
+      switchingTargetRef.current = false;
+      setSwitchingTarget(false);
+      setPromptNotice({ message: (err as Error).message || "Could not switch agents.", urgent: true });
     }
   }
 
   return (
     <div
-      className="pane"
+      className="pane chat-pane"
       style={{ height: "100%" }}
       onFocusCapture={() => onActivityChange(true)}
       onBlurCapture={(event) => {
@@ -387,14 +561,61 @@ export default function ChatPanel({
         if (!(nextTarget instanceof Node) || !event.currentTarget.contains(nextTarget)) onActivityChange(false);
       }}
     >
-      <div className="pane-header">
-        <span>Agent Chat</span>
-        <div style={{ flex: 1 }} />
-        {entries.length > 0 && (
-          <button className="btn small" onClick={newChat} disabled={busy}>
-            New chat
-          </button>
-        )}
+      <div className="pane-header agent-chat-header">
+        <h2 className="agent-chat-title">Agent Chat</h2>
+        <div className="agent-chat-header-spacer" />
+        <label className="sr-only" htmlFor="agent-target-select">Agent and model</label>
+        <select
+          id="agent-target-select"
+          className="agent-target-select"
+          value={agentTargetKey(activeTarget)}
+          onChange={(event) => {
+            const next = event.currentTarget.value;
+            // Keep the controlled picker visibly on the current target while a
+            // confirmation or main-process switch is pending (and after cancel).
+            event.currentTarget.value = agentTargetKey(activeTarget);
+            void changeAgentTarget(next);
+          }}
+          disabled={busy || switchingTarget || resettingChat}
+          aria-describedby="agent-target-switch-help"
+          title={backendLabel}
+        >
+          {config.agent.connections.map((connection) => (
+            <optgroup key={connection.id} label={connection.label}>
+              {connection.models.map((model) => (
+                <option key={model} value={agentTargetKey({ connectionId: connection.id, model })}>
+                  {connection.label} — {model}
+                </option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
+        <span id="agent-target-switch-help" className="sr-only">
+          Switching agents starts a new chat. The unsent draft is preserved.
+        </span>
+        <button
+          type="button"
+          className="btn small agent-settings-shortcut"
+          onClick={onOpenAgentSettings}
+          disabled={switchingTarget || resettingChat}
+          aria-label="Manage agent connections"
+          title="Manage agent connections"
+        >
+          ⚙
+        </button>
+        <button
+          type="button"
+          className="btn small"
+          onClick={newChat}
+          disabled={busy || switchingTarget || resettingChat || (entries.length === 0 && usage === null)}
+          title={resettingChat
+            ? "Starting a new chat"
+            : entries.length === 0 && usage === null
+              ? "This is already a new chat"
+              : "Start a new chat"}
+        >
+          New chat
+        </button>
       </div>
 
       {/* Held back until a turn finishes, so a streaming first reply doesn't
@@ -435,9 +656,14 @@ export default function ChatPanel({
       >
         {ready === false && (
           <div className="chat-message system">
-            {isAnthropic
-              ? "No Anthropic API key yet — add one in Settings, or switch to a provider with a free tier."
-              : `${preset.label} isn't configured yet — finish setting it up in Settings.`}
+            <div>
+              {isAnthropic
+                ? `No API key is saved for ${activeConnection?.label ?? "this Anthropic connection"} — add one in Settings or switch agents.`
+                : `${activeConnection?.label ?? preset.label} isn't configured yet — finish setting it up in Settings or switch agents.`}
+            </div>
+            <button type="button" className="btn small agent-configure-action" onClick={onOpenAgentSettings}>
+              Manage agent connections
+            </button>
           </div>
         )}
         {ready && !connected && (
@@ -604,8 +830,16 @@ export default function ChatPanel({
           ref={inputRef}
           rows={2}
           value={draft}
-          placeholder={ready === false ? "Configure a model backend in Settings first…" : "Ask your agent to do something…"}
-          disabled={ready === false}
+          placeholder={resettingChat
+            ? "Starting a new chat…"
+            : ready === null
+            ? "Checking the selected agent…"
+            : switchingTarget
+              ? "Switching agents…"
+            : ready === false
+              ? "Configure this agent in Settings first…"
+              : "Ask your agent to do something…"}
+          disabled={ready !== true || switchingTarget || resettingChat}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
@@ -626,7 +860,7 @@ export default function ChatPanel({
             Stop
           </button>
         ) : (
-          <button className="btn primary" onClick={send} disabled={ready === false || !draft.trim()}>
+          <button className="btn primary" onClick={send} disabled={ready !== true || switchingTarget || resettingChat || !draft.trim()}>
             Send
           </button>
         )}

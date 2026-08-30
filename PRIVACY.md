@@ -27,9 +27,12 @@ data directory. Those settings can include workspace and executable paths,
 the selected server profile and target, artifact update records, and model
 provider configuration.
 
-Model-provider API keys are stored separately using Electron `safeStorage`,
-which uses the operating system's protected credential facilities. Keys are
-sent only to the provider endpoint selected by the user for authentication.
+Model-provider API keys are stored separately per named connection using
+Electron `safeStorage`, which uses the operating system's protected credential
+facilities. Each key is bound to that connection and provider endpoint and is
+sent only to that selected endpoint for authentication. Changing an endpoint
+does not carry its previously saved key to the new host. Connections marked
+keyless never load, store, or send a credential.
 Conversation history is held in application memory for the active session and
 is not persisted by QB Studio. Imported repositories and user-approved file
 changes are stored in the workspace selected by the user.
@@ -43,7 +46,7 @@ rollout cohort; it is unrelated to the user's Windows or GitHub identity.
 
 Uninstalling the application might not remove settings retained in the Windows
 application data directory. Users can delete that local data manually and can
-remove a saved provider key from QB Studio settings.
+remove each saved provider key or connection from QB Studio settings.
 
 ## Optional AI and model providers
 
