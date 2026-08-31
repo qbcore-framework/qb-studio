@@ -51,11 +51,13 @@ import {
   previewDevelopmentRcon,
 } from "./workspaceCreator";
 import {
+  assertTxAdminDataPath,
   discoverTxAdminControlProfile,
   ensureManagedRuntime,
   loadLocalServerConfig,
   parseLocalServerConfig,
   stopManagedRuntime,
+  synchronizeTxAdminDataPath,
 } from "./managedRuntime";
 import { OperationLock } from "./operationLock";
 import { LuaLanguageServerProcess, type JsonRpcMessage } from "./luaLanguageServer";
@@ -333,6 +335,24 @@ function serverExeFor(config: StudioConfig, target: CfxTarget): string | null {
   if (target === "legacy") return config.legacyFxServerExePath;
   if (target === "enhanced") return config.enhancedFxServerExePath;
   return config.redmFxServerExePath;
+}
+
+async function assertConfiguredServersStoppedForWorkspaceSwitch(config: StudioConfig): Promise<void> {
+  const checked = new Set<string>();
+  for (const target of CFX_TARGETS) {
+    const executable = serverExeFor(config, target);
+    if (!executable) continue;
+    const identity = process.platform === "win32" ? path.resolve(executable).toLowerCase() : path.resolve(executable);
+    if (checked.has(identity)) continue;
+    checked.add(identity);
+    const pids = await findRunningServerPids(executable);
+    if (pids.length > 0) {
+      throw new Error(
+        `Stop the running ${cfxTargetLabel(target)} server before switching workspaces ` +
+        `(process${pids.length === 1 ? "" : "es"} ${pids.join(", ")}).`,
+      );
+    }
+  }
 }
 
 function scopedClientExe(value: unknown, target: CfxTarget): string | null {
@@ -792,6 +812,7 @@ function registerIpcHandlers() {
       if (switchingAgent && agent.isRunning()) {
         throw new Error("Stop the current agent response before changing its connection or model.");
       }
+      if (switchingProfile) await assertConfiguredServersStoppedForWorkspaceSwitch(previous);
       const saved = saveConfigWithConnectionKeys(normalizedRequested, credentialUpdates);
       if (switchingProfile) {
         invalidateConsoleSourceIndex();
@@ -850,25 +871,31 @@ function registerIpcHandlers() {
     await shell.openPath(directory);
   });
   ipcMain.handle("recents:list", () => listRecentWorkspaces(recentWorkspacesPath()));
-  ipcMain.handle("recents:select", async (_e, idValue: unknown, allowDiscard: unknown) => {
-    if (dirtyFileCount > 0 && allowDiscard !== true) throw new Error("Save or explicitly discard open editor changes before switching workspaces.");
-    const id = requireString(idValue, "Recent workspace id", 24);
-    const recent = resolveRecentWorkspace(recentWorkspacesPath(), id);
-    invalidateConsoleSourceIndex();
-    clearConsoleViews();
-    agent.resetConversation();
-    await mcpDisconnect();
-    stopManagedRuntime();
-    luaLanguageServer.stop();
-    const saved = saveConfig({
-      ...loadConfig(),
-      txDataPath: recent.txDataPath,
-      selectedProfile: recent.profile,
-      activeCfxTarget: recent.target,
-    });
-    try { recordRecentWorkspace(recentWorkspacesPath(), saved); } catch { /* non-critical app history */ }
-    return saved;
-  });
+  ipcMain.handle("recents:select", (_e, idValue: unknown, allowDiscard: unknown) =>
+    serverOperation.run("the recent workspace switch", async () => {
+      if (dirtyFileCount > 0 && allowDiscard !== true) {
+        throw new Error("Save or explicitly discard open editor changes before switching workspaces.");
+      }
+      const id = requireString(idValue, "Recent workspace id", 24);
+      const recent = resolveRecentWorkspace(recentWorkspacesPath(), id);
+      const previous = loadConfig();
+      await assertConfiguredServersStoppedForWorkspaceSwitch(previous);
+      invalidateConsoleSourceIndex();
+      clearConsoleViews();
+      agent.resetConversation();
+      await mcpDisconnect();
+      stopManagedRuntime();
+      luaLanguageServer.stop();
+      const saved = saveConfig({
+        ...previous,
+        txDataPath: recent.txDataPath,
+        selectedProfile: recent.profile,
+        activeCfxTarget: recent.target,
+      });
+      try { recordRecentWorkspace(recentWorkspacesPath(), saved); } catch { /* non-critical app history */ }
+      return saved;
+    }),
+  );
 
   // --- conventional local client discovery and setup diagnostics ---
   ipcMain.handle("installs:detectClients", () => {
@@ -1275,7 +1302,6 @@ function registerIpcHandlers() {
         }
       }
       const workspaceRoot = activeProfileRoot();
-      const controlProfile = discoverTxAdminControlProfile(config.txDataPath, workspaceRoot);
       const recoveryNotice = recoverInterruptedArtifactUpdate(executable, artifactStatePath(target));
       const selectedArtifact = resolveArtifactTarget(executable, config.txDataPath);
       const alreadyRunning = await findRunningServerPids(selectedArtifact.executablePath);
@@ -1283,7 +1309,43 @@ function registerIpcHandlers() {
         const endpoint = parseLocalServerConfig(loadLocalServerConfig(workspaceRoot));
         await assertFxServerPortAvailable(endpoint.host, endpoint.port);
       }
+      let controlProfile = discoverTxAdminControlProfile(config.txDataPath, workspaceRoot);
+      if (target === "enhanced") {
+        if (alreadyRunning.length > 0) {
+          try {
+            assertTxAdminDataPath(config.txDataPath, workspaceRoot);
+            controlProfile = "default";
+          } catch (error) {
+            throw new Error(
+              "FiveM Enhanced is already running while txAdmin's default dataPath disagrees with the selected workspace. " +
+              `Stop the running server before switching workspaces. ${(error as Error).message}`,
+            );
+          }
+        } else {
+          const synchronized = synchronizeTxAdminDataPath(config.txDataPath, workspaceRoot);
+          controlProfile = synchronized.controlProfile;
+          if (synchronized.updated) {
+            // A runtime created while the stale profile was selected has no
+            // trustworthy txAdmin log source. Let its transport drop so the UI
+            // reconnects with the newly verified default control profile.
+            clearConsoleViews();
+            stopManagedRuntime();
+          }
+        }
+      }
       const launched = await launchLocalServer(executable, config.txDataPath, controlProfile);
+      if (target === "enhanced") {
+        try {
+          assertTxAdminDataPath(config.txDataPath, workspaceRoot);
+        } catch (error) {
+          if (!launched.alreadyRunning) {
+            try { await stopLocalServer(executable, config.txDataPath); } catch { /* the path mismatch remains the primary failure */ }
+          }
+          throw new Error(
+            `txAdmin's dataPath changed during FiveM Enhanced startup, so QB Studio stopped the server. ${(error as Error).message}`,
+          );
+        }
+      }
       return { ...launched, target, recoveryNotice: recoveryNotice ?? undefined };
     }),
   );

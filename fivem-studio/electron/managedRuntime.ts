@@ -1,10 +1,12 @@
 import { app } from "electron";
+import { isUtf8 } from "node:buffer";
 import { randomBytes } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { spawn, type ChildProcess } from "node:child_process";
 
 import type { StudioConfig } from "./configStore";
+import { contentRevision, writeTextFile } from "./fsTree";
 import { isLoopbackHostname } from "./localUrl";
 import { assertSafeBasename, resolveInsideRoot } from "./pathSafety";
 
@@ -195,6 +197,143 @@ export function loadLocalServerConfig(profileRoot: string): string {
 function normalizedPath(value: string): string {
   const resolved = path.resolve(value).replace(/[\\/]+$/, "");
   return process.platform === "win32" ? resolved.toLowerCase() : resolved;
+}
+
+interface TxAdminControlProfileSnapshot {
+  configPath: string;
+  profilePath: string;
+  raw: Buffer;
+  parsed: Record<string, unknown>;
+  server: Record<string, unknown>;
+  dataPath: string;
+}
+
+export interface TxAdminDataPathSyncResult {
+  controlProfile: "default";
+  configPath: string;
+  dataPath: string;
+  updated: boolean;
+}
+
+function txAdminControlProfileSnapshot(txDataPath: string, controlProfile: string): TxAdminControlProfileSnapshot {
+  const profile = assertSafeBasename(controlProfile);
+  const profilePath = resolveInsideRoot(txDataPath, profile);
+  let profileStat: fs.Stats;
+  try {
+    profileStat = fs.lstatSync(profilePath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      throw new Error(
+        `txAdmin's ${profile} control profile is missing. Set up txAdmin in this txData folder before starting the server.`,
+      );
+    }
+    throw error;
+  }
+  if (!profileStat.isDirectory() || profileStat.isSymbolicLink()) {
+    throw new Error(`txAdmin's ${profile} control profile must be a real directory.`);
+  }
+
+  const configPath = resolveInsideRoot(profilePath, "config.json");
+  let stat: fs.Stats;
+  try {
+    stat = fs.lstatSync(configPath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      throw new Error(`txAdmin's ${profile}/config.json is missing. Finish the txAdmin setup before starting the server.`);
+    }
+    throw error;
+  }
+  if (!stat.isFile() || stat.isSymbolicLink()) {
+    throw new Error(`txAdmin's ${profile}/config.json must be a regular file.`);
+  }
+  if (stat.size > MAX_TXADMIN_CONFIG_BYTES) {
+    throw new Error(`txAdmin's ${profile}/config.json is too large to update safely.`);
+  }
+
+  const raw = fs.readFileSync(configPath);
+  if (raw.length !== stat.size) {
+    throw new Error(`txAdmin's ${profile}/config.json changed while QB Studio was reading it. Try starting again.`);
+  }
+  if (!isUtf8(raw)) throw new Error(`txAdmin's ${profile}/config.json is not valid UTF-8.`);
+
+  let parsedValue: unknown;
+  try {
+    parsedValue = JSON.parse(raw.toString("utf8"));
+  } catch {
+    throw new Error(`txAdmin's ${profile}/config.json is not valid JSON. Repair it in txAdmin before starting the server.`);
+  }
+  if (typeof parsedValue !== "object" || parsedValue === null || Array.isArray(parsedValue)) {
+    throw new Error(`txAdmin's ${profile}/config.json must contain a JSON object.`);
+  }
+  const parsed = parsedValue as Record<string, unknown>;
+  if (typeof parsed.server !== "object" || parsed.server === null || Array.isArray(parsed.server)) {
+    throw new Error(`txAdmin's ${profile}/config.json has no valid server configuration.`);
+  }
+  const server = parsed.server as Record<string, unknown>;
+  if (typeof server.dataPath !== "string" || !server.dataPath.trim()) {
+    throw new Error(`txAdmin's ${profile}/config.json has no valid server.dataPath.`);
+  }
+  return { configPath, profilePath, raw, parsed, server, dataPath: server.dataPath };
+}
+
+function resolvedTxAdminDataPath(snapshot: TxAdminControlProfileSnapshot): string {
+  return path.isAbsolute(snapshot.dataPath)
+    ? snapshot.dataPath
+    : path.resolve(snapshot.profilePath, snapshot.dataPath);
+}
+
+function txAdminDataPathValue(workspacePath: string): string {
+  const resolved = path.resolve(workspacePath).replace(/[\\/]+$/, "");
+  return process.platform === "win32" ? `${resolved.replace(/\\/g, "/")}/` : `${resolved}${path.sep}`;
+}
+
+function serializeTxAdminConfig(snapshot: TxAdminControlProfileSnapshot): string {
+  const source = snapshot.raw.toString("utf8");
+  const newline = source.includes("\r\n") ? "\r\n" : "\n";
+  const indentMatch = source.match(/\r?\n([ \t]+)"/);
+  const indent = indentMatch?.[1] ?? (source.includes("\n") ? "  " : undefined);
+  const trailingNewline = /\r?\n$/.test(source) ? newline : "";
+  return `${JSON.stringify(snapshot.parsed, null, indent).replace(/\n/g, newline)}${trailingNewline}`;
+}
+
+/**
+ * Enhanced artifacts always boot txAdmin's default control profile. Keep that
+ * profile pointed at the selected Studio workspace, then re-read it so a
+ * failed, stale, or concurrent update can never silently launch another one.
+ */
+export function synchronizeTxAdminDataPath(txDataPath: string, workspacePath: string): TxAdminDataPathSyncResult {
+  const workspace = resolveInsideRoot(txDataPath, path.relative(txDataPath, workspacePath));
+  const workspaceStat = fs.lstatSync(workspace);
+  if (!workspaceStat.isDirectory() || workspaceStat.isSymbolicLink()) {
+    throw new Error("The selected txAdmin server-data workspace must be a real directory.");
+  }
+
+  const target = normalizedPath(workspace);
+  const snapshot = txAdminControlProfileSnapshot(txDataPath, "default");
+  if (normalizedPath(resolvedTxAdminDataPath(snapshot)) === target) {
+    return { controlProfile: "default", configPath: snapshot.configPath, dataPath: snapshot.dataPath, updated: false };
+  }
+
+  snapshot.server.dataPath = txAdminDataPathValue(workspace);
+  writeTextFile(snapshot.configPath, serializeTxAdminConfig(snapshot), contentRevision(snapshot.raw));
+  const verified = assertTxAdminDataPath(txDataPath, workspace, "default");
+  return { controlProfile: "default", configPath: verified.configPath, dataPath: verified.dataPath, updated: true };
+}
+
+/** Refuse startup unless the selected control profile still resolves to the selected workspace. */
+export function assertTxAdminDataPath(
+  txDataPath: string,
+  workspacePath: string,
+  controlProfile = "default",
+): Pick<TxAdminDataPathSyncResult, "configPath" | "dataPath"> {
+  const workspace = resolveInsideRoot(txDataPath, path.relative(txDataPath, workspacePath));
+  const snapshot = txAdminControlProfileSnapshot(txDataPath, controlProfile);
+  if (normalizedPath(resolvedTxAdminDataPath(snapshot)) !== normalizedPath(workspace)) {
+    throw new Error(
+      `txAdmin's ${controlProfile}/config.json points at a different server-data workspace. The server was not started.`,
+    );
+  }
+  return { configPath: snapshot.configPath, dataPath: snapshot.dataPath };
 }
 
 /**
