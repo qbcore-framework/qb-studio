@@ -92,6 +92,7 @@ import { agentPromptWorkspaceScope } from "./agentPromptDecision";
 import { createResourceDirectory, createResourceFile, createStarterResource } from "./resourceCreation";
 import { requireStarterResourceTemplate } from "./resourceTemplates";
 import { prepareConsoleAgentFix } from "./consoleAgentFix";
+import { ClientConsoleReader } from "./clientConsole";
 
 let mainWindow: BrowserWindow | null = null;
 let consoleWindow: BrowserWindow | null = null;
@@ -117,6 +118,7 @@ let workspaceSearch: WorkspaceSearchService | null = null;
 let bookmarkStore: BookmarkStore | null = null;
 let themePackStore: ThemePackStore | null = null;
 const discordPresence = new DiscordPresence();
+const clientConsoleReader = new ClientConsoleReader();
 let consoleClearGeneration = 0;
 let previewThemePreference: ThemePreference | null = null;
 
@@ -509,11 +511,19 @@ function createWindow() {
   });
 }
 
-function openConsoleWindow(): void {
+type ConsoleOutputSource = "server" | "client";
+
+function requireConsoleOutputSource(value: unknown): ConsoleOutputSource {
+  if (value !== "server" && value !== "client") throw new Error("Console source must be server or client.");
+  return value;
+}
+
+function openConsoleWindow(source: ConsoleOutputSource): void {
   if (consoleWindow && !consoleWindow.isDestroyed()) {
     if (consoleWindow.isMinimized()) consoleWindow.restore();
     consoleWindow.show();
     consoleWindow.focus();
+    consoleWindow.webContents.send("console:sourceRequested", source);
     return;
   }
   const startupConfig = loadConfig();
@@ -543,9 +553,10 @@ function openConsoleWindow(): void {
   if (devUrl) {
     const target = new URL(devUrl);
     target.searchParams.set("view", "console");
+    target.searchParams.set("source", source);
     void consoleWindow.loadURL(target.toString());
   } else {
-    void consoleWindow.loadFile(path.join(__dirname, "../dist/index.html"), { query: { view: "console" } });
+    void consoleWindow.loadFile(path.join(__dirname, "../dist/index.html"), { query: { view: "console", source } });
   }
   consoleWindow.once("ready-to-show", () => consoleWindow?.show());
   const allowedNavigation = (target: string) => {
@@ -670,7 +681,25 @@ function registerIpcHandlers() {
     requireStudioWindowSender(event);
     return loadConfig();
   });
-  ipcMain.handle("console:openPopout", () => openConsoleWindow());
+  ipcMain.handle("console:openPopout", (event, sourceValue: unknown) => {
+    requireStudioWindowSender(event);
+    openConsoleWindow(requireConsoleOutputSource(sourceValue));
+  });
+  ipcMain.handle("console:getClientOutput", (event, linesValue: unknown) => {
+    requireStudioWindowSender(event);
+    const lines = requireFiniteNumber(linesValue, "Client console line count");
+    if (!Number.isInteger(lines) || lines < 1 || lines > 5000) {
+      throw new Error("Client console line count must be an integer from 1 to 5000.");
+    }
+    const config = loadConfig();
+    return clientConsoleReader.read({
+      target: config.activeCfxTarget,
+      configuredExecutable: clientExeFor(config, config.activeCfxTarget),
+      localAppData: process.env.LOCALAPPDATA,
+      appData: app.getPath("appData"),
+      lines,
+    });
+  });
   ipcMain.handle("console:clearView", () => clearConsoleViews());
   ipcMain.handle("console:openSourceLocation", async (event, request: unknown) => {
     requireStudioWindowSender(event);

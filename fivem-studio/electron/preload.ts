@@ -14,7 +14,8 @@ const api = {
     },
   },
   console: {
-    openPopout: () => ipcRenderer.invoke("console:openPopout"),
+    openPopout: (source: "server" | "client") => ipcRenderer.invoke("console:openPopout", source),
+    getClientOutput: (lines: number) => ipcRenderer.invoke("console:getClientOutput", lines),
     openSourceLocation: (location: unknown) => ipcRenderer.invoke("console:openSourceLocation", location),
     requestAgentFix: (location: unknown, diagnosticLine: string) =>
       ipcRenderer.invoke("console:requestAgentFix", location, diagnosticLine),
@@ -41,6 +42,11 @@ const api = {
         callback(prompt, workspaceScope, agentScope);
       ipcRenderer.on("console:agentFixPrompt", listener);
       return () => ipcRenderer.removeListener("console:agentFixPrompt", listener);
+    },
+    onSourceRequested: (callback: (source: "server" | "client") => void) => {
+      const listener = (_e: unknown, source: "server" | "client") => callback(source);
+      ipcRenderer.on("console:sourceRequested", listener);
+      return () => ipcRenderer.removeListener("console:sourceRequested", listener);
     },
   },
   theme: {

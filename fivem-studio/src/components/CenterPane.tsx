@@ -2,7 +2,7 @@ import { Fragment, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useS
 import { Group, Panel, Separator } from "react-resizable-panels";
 import type { FileChangeReview, OpenFile } from "../App";
 import { languageForPath } from "../editorLanguage";
-import type { CfxTarget, CrashTriageContext, EditorBookmark, EditorPreferences, EditorProblem, ResolvedTheme, ResourceComparison, ResourceContext, ResourceDependencyGraph, WindowCandidate } from "../global";
+import type { CfxTarget, ConsoleOutputSource, CrashTriageContext, EditorBookmark, EditorPreferences, EditorProblem, ResolvedTheme, ResourceComparison, ResourceContext, ResourceDependencyGraph, WindowCandidate } from "../global";
 import { t } from "../i18n";
 import type { LuaServiceStatus } from "../luaLanguageService";
 import { countNewConsoleLines, filterConsoleOutput, newestErrorBlock, type ConsoleSeverity } from "../consoleText";
@@ -647,7 +647,7 @@ function ConsoleSection({
         onDismissCrashTriage={onDismissCrashTriage}
         onSendCrashTriage={onSendCrashTriage}
         onOutputChange={onOutputChange}
-        onOpenPopout={() => void window.api.console.openPopout()}
+        onOpenPopout={(source) => void window.api.console.openPopout(source)}
       />
     </div>
   );
@@ -676,8 +676,10 @@ export function ConsolePanel({
   onDismissCrashTriage: () => void;
   onSendCrashTriage: (text: string) => void;
   onOutputChange: (output: string) => void;
-  onOpenPopout?: () => void;
+  onOpenPopout?: (source: ConsoleOutputSource) => void;
 }) {
+  const [consoleSource, setConsoleSource] = useState<ConsoleOutputSource>(() =>
+    new URLSearchParams(window.location.search).get("source") === "client" ? "client" : "server");
   const [output, setOutput] = useState("");
   const [paused, setPaused] = useState(false);
   const [bufferedLines, setBufferedLines] = useState(0);
@@ -691,7 +693,10 @@ export function ConsolePanel({
   const [refreshNotice, setRefreshNotice] = useState<string | null>(null);
   const [sourceError, setSourceError] = useState<string | null>(null);
   const [viewCleared, setViewCleared] = useState(false);
-  const requestRef = useRef<Promise<void> | null>(null);
+  const [clientAvailable, setClientAvailable] = useState<boolean | null>(null);
+  const requestRef = useRef<{ source: ConsoleOutputSource; promise: Promise<void> } | null>(null);
+  const consoleSourceRef = useRef<ConsoleOutputSource>(consoleSource);
+  const clientTargetRef = useRef<CfxTarget | null>(null);
   const outputRef = useRef<HTMLDivElement>(null);
   const stickToBottomRef = useRef(true);
   const latestOutputRef = useRef("");
@@ -701,7 +706,7 @@ export function ConsolePanel({
   const pausedRef = useRef(false);
   const frozenOutputRef = useRef("");
 
-  const acceptOutput = useCallback((next: string) => {
+  const acceptOutput = useCallback((next: string, source: ConsoleOutputSource) => {
     let visible = next;
     if (clearOnNextRefreshRef.current) {
       clearOnNextRefreshRef.current = false;
@@ -712,7 +717,7 @@ export function ConsolePanel({
     }
     latestRawOutputRef.current = next;
     latestOutputRef.current = visible;
-    onOutputChange(next);
+    if (source === "server") onOutputChange(next);
     if (pausedRef.current) {
       setBufferedLines(countNewConsoleLines(frozenOutputRef.current, visible));
       return;
@@ -721,6 +726,29 @@ export function ConsolePanel({
     setOutput(visible);
     setViewCleared(clearActiveRef.current && visible === "");
   }, [onOutputChange]);
+
+  useEffect(() => window.api.console.onSourceRequested(setConsoleSource), []);
+
+  useEffect(() => {
+    consoleSourceRef.current = consoleSource;
+    latestOutputRef.current = "";
+    latestRawOutputRef.current = "";
+    frozenOutputRef.current = "";
+    clearActiveRef.current = false;
+    clearOnNextRefreshRef.current = false;
+    clientTargetRef.current = null;
+    pausedRef.current = false;
+    setOutput("");
+    setPaused(false);
+    setLoading(false);
+    setBufferedLines(0);
+    setClientAvailable(null);
+    setError(null);
+    setCopyNotice(null);
+    setSourceError(null);
+    setViewCleared(false);
+    stickToBottomRef.current = true;
+  }, [consoleSource]);
 
   const clearView = useCallback(() => {
     if (latestRawOutputRef.current) {
@@ -750,22 +778,46 @@ export function ConsolePanel({
   }, [clearView]);
 
   const refresh = useCallback((showLoading: boolean): Promise<void> => {
-    if (requestRef.current) return requestRef.current;
+    const requestedSource = consoleSource;
+    if (requestRef.current?.source === requestedSource) return requestRef.current.promise;
     const view = outputRef.current;
     stickToBottomRef.current = !view || view.scrollHeight - view.scrollTop - view.clientHeight < 32;
     if (showLoading) setLoading(true);
     setError(null);
-    const request = window.api.mcp
-      .callTool("get_console_output", { lines: 200 })
-      .then(acceptOutput)
-      .catch((err) => setError((err as Error).message))
+    const fetchOutput = requestedSource === "client"
+      ? window.api.console.getClientOutput(200).then((snapshot) => {
+          if (consoleSourceRef.current !== requestedSource) return;
+          if (clientTargetRef.current && clientTargetRef.current !== snapshot.target) {
+            latestOutputRef.current = "";
+            latestRawOutputRef.current = "";
+            frozenOutputRef.current = "";
+            clearActiveRef.current = false;
+            clearOnNextRefreshRef.current = false;
+          }
+          clientTargetRef.current = snapshot.target;
+          setClientAvailable(snapshot.available);
+          acceptOutput(snapshot.output, requestedSource);
+        })
+      : window.api.mcp.callTool("get_console_output", { lines: 200 }).then((next) => {
+          if (consoleSourceRef.current !== requestedSource) return;
+          acceptOutput(next, requestedSource);
+        });
+    const marker: { source: ConsoleOutputSource; promise: Promise<void> } = {
+      source: requestedSource,
+      promise: Promise.resolve(),
+    };
+    const request = fetchOutput
+      .catch((err) => {
+        if (consoleSourceRef.current === requestedSource) setError((err as Error).message);
+      })
       .finally(() => {
-        requestRef.current = null;
-        if (showLoading) setLoading(false);
+        if (requestRef.current === marker) requestRef.current = null;
+        if (showLoading && consoleSourceRef.current === requestedSource) setLoading(false);
       });
-    requestRef.current = request;
+    marker.promise = request;
+    requestRef.current = marker;
     return request;
-  }, [acceptOutput]);
+  }, [acceptOutput, consoleSource]);
 
   useEffect(() => {
     const onVisibilityChange = () => setPageVisible(document.visibilityState !== "hidden");
@@ -774,7 +826,8 @@ export function ConsolePanel({
   }, []);
 
   useEffect(() => {
-    if (!active || !pageVisible || !connected || available !== true || refreshIntervalMs === 0) return;
+    if (!active || !pageVisible || refreshIntervalMs === 0 ||
+        (consoleSource === "server" && (!connected || available !== true))) return;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const poll = async () => {
@@ -786,7 +839,7 @@ export function ConsolePanel({
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [active, available, connected, pageVisible, refresh, refreshIntervalMs]);
+  }, [active, available, connected, consoleSource, pageVisible, refresh, refreshIntervalMs]);
 
   useEffect(() => {
     if (stickToBottomRef.current && outputRef.current) {
@@ -796,12 +849,17 @@ export function ConsolePanel({
 
   useEffect(() => {
     if (!refreshSignal || !connected || available !== true) return;
+    setConsoleSource("server");
     setRefreshNotice(t("console.refreshAfterRestart", { resource: refreshSignal.resource }));
+  }, [available, connected, refreshSignal]);
+
+  useEffect(() => {
+    if (!refreshSignal || !connected || available !== true || consoleSource !== "server") return;
     const timer = setTimeout(() => {
       void refresh(false).finally(() => setRefreshNotice(null));
     }, 600);
     return () => clearTimeout(timer);
-  }, [available, connected, refresh, refreshSignal]);
+  }, [available, connected, consoleSource, refresh, refreshSignal]);
 
   async function changeRefreshInterval(intervalMs: number) {
     setSavingInterval(true);
@@ -881,7 +939,24 @@ export function ConsolePanel({
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", width: "100%" }}>
       <div className="console-toolbar">
-        <button className="btn small" onClick={() => void refresh(true)} disabled={loading || !connected || available !== true}>
+        <div className="console-source-switch" role="group" aria-label={t("console.source.label")}>
+          {(["server", "client"] as const).map((source) => (
+            <button
+              key={source}
+              type="button"
+              className={`btn small ${consoleSource === source ? "active" : ""}`}
+              aria-pressed={consoleSource === source}
+              onClick={() => setConsoleSource(source)}
+            >
+              {t(source === "server" ? "console.source.server" : "console.source.client")}
+            </button>
+          ))}
+        </div>
+        <button
+          className="btn small"
+          onClick={() => void refresh(true)}
+          disabled={loading || (consoleSource === "server" && (!connected || available !== true))}
+        >
           {loading ? "Refreshing…" : "Refresh"}
         </button>
         <button
@@ -899,7 +974,7 @@ export function ConsolePanel({
           {t("console.copyLastError")}
         </button>
         {onOpenPopout && (
-          <button className="btn small" type="button" onClick={onOpenPopout}>
+          <button className="btn small" type="button" onClick={() => onOpenPopout(consoleSource)}>
             {t("console.openPopout")}
           </button>
         )}
@@ -949,7 +1024,7 @@ export function ConsolePanel({
           <button className="banner-dismiss" type="button" onClick={() => setCopyNotice(null)} aria-label={t("common.dismiss")}>×</button>
         </div>
       )}
-      {crashTriage && (
+      {consoleSource === "server" && crashTriage && (
         <section className="console-crash-card" aria-label={t("console.crashTitle")}>
           <div className="console-crash-head">
             <strong>{t("console.crashTitle")}</strong>
@@ -966,7 +1041,7 @@ export function ConsolePanel({
           </div>
         </section>
       )}
-      {connected && available === false && (
+      {consoleSource === "server" && connected && available === false && (
         <div className="operations-empty" role="status">
           Console tailing requires exactly one txAdmin control profile whose <code>config.json</code> {" "}
           <code>server.dataPath</code> points to this workspace. Start FXServer, then open Settings and Save again to rescan.
@@ -992,7 +1067,9 @@ export function ConsolePanel({
               ? `(${t("console.noMatches")})`
               : viewCleared
                 ? `(${t("console.viewCleared")})`
-              : available === false
+              : consoleSource === "client" && clientAvailable === false
+                ? t("console.clientUnavailable")
+              : consoleSource === "server" && available === false
                 ? "(console not attached yet)"
                 : refreshIntervalMs === 0
                   ? "(no output yet — click Refresh)"

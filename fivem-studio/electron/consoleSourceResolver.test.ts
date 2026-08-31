@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { invalidateConsoleSourceIndex, resolveConsoleSourceLocation } from "./consoleSourceResolver";
+import { parseConsoleSourceLocations } from "./consoleSourceParser";
 
 function canonical(value: string): Promise<string> {
   return fs.promises.realpath(value);
@@ -45,6 +46,20 @@ test("resolves case-insensitive resources nested below category folders", async 
     path: await canonical(path.join(resource, "server", "main.lua")),
     line: 42,
     column: 7,
+  });
+});
+
+test("resolves a parsed client-console error to the workspace client script", async (t) => {
+  const { profile, resources, addResource } = workspace(t);
+  const resource = addResource("[local]", "demo", { "client/main.lua": "error('broken')" });
+  const [request] = parseConsoleSourceLocations(
+    "[     42000] [ citizen-scripting-lua] MainThrd/ SCRIPT ERROR: @demo/client/main.lua:73: attempt to index a nil value",
+  );
+  assert.ok(request);
+  assert.deepEqual(await resolveConsoleSourceLocation(profile, resources, request), {
+    path: await canonical(path.join(resource, "client", "main.lua")),
+    line: 73,
+    column: 1,
   });
 });
 

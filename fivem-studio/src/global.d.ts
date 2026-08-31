@@ -22,6 +22,14 @@ export interface StudioConfig {
   agent: AgentSettings;
 }
 
+export type ConsoleOutputSource = "server" | "client";
+
+export interface ClientConsoleSnapshot {
+  available: boolean;
+  output: string;
+  target: CfxTarget;
+}
+
 export type AgentProviderKind = "anthropic" | "openai";
 
 export interface AgentConnection {
@@ -575,7 +583,8 @@ declare global {
         onChanged(callback: (config: StudioConfig) => void): () => void;
       };
       console: {
-        openPopout(): Promise<void>;
+        openPopout(source: ConsoleOutputSource): Promise<void>;
+        getClientOutput(lines: number): Promise<ClientConsoleSnapshot>;
         openSourceLocation(location: ConsoleSourceLocationRequest): Promise<ResolvedConsoleSourceLocation>;
         requestAgentFix(location: ConsoleSourceLocationRequest, diagnosticLine: string): Promise<void>;
         clearView(): Promise<number>;
@@ -585,6 +594,7 @@ declare global {
         onClearViewChanged(callback: (generation: number) => void): () => void;
         onRevealSourceLocation(callback: (location: ResolvedConsoleSourceLocation) => void): () => void;
         onAgentFixPrompt(callback: (prompt: string, workspaceScope: string, agentScope: string) => void): () => void;
+        onSourceRequested(callback: (source: ConsoleOutputSource) => void): () => void;
       };
       theme: {
         system(): Promise<"dark" | "light">;

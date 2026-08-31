@@ -1885,6 +1885,13 @@ button.tree-node {
   border-color: var(--accent);
   background: var(--accent-wash);
 }
+.console-source-switch {
+  display: flex;
+  gap: 3px;
+  padding-right: 6px;
+  margin-right: 1px;
+  border-right: 1px solid var(--border);
+}
 .console-severity-chips {
   display: flex;
   gap: 3px;

@@ -36,6 +36,16 @@ test("parses Lua and JavaScript Cfx resource frames with exact display ranges", 
   assert.equal(js.slice(jsLocation.start, jsLocation.end), "@ssl/server/crypto.js:26:20");
 });
 
+test("parses a FiveM client-log error and preserves its client source path", () => {
+  const line = "[     42000] [ citizen-scripting-lua] MainThrd/ SCRIPT ERROR: @demo/client/main.lua:73: attempt to index a nil value";
+  const location = only(line);
+  assert.deepEqual(
+    { kind: location.kind, source: location.source, resourceName: location.resourceName, line: location.line, column: location.column },
+    { kind: "resource", source: "client/main.lua", resourceName: "demo", line: 73, column: 1 },
+  );
+  assert.equal(line.slice(location.start, location.end), "@demo/client/main.lua:73");
+});
+
 test("parses colored Cfx frames without losing raw offsets", () => {
   const line = "^3> fn^7 (^5@custom_core/client/function.lua^7:199)";
   const location = only(line);
