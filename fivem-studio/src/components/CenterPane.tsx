@@ -8,6 +8,7 @@ import type { LuaServiceStatus } from "../luaLanguageService";
 import { countNewConsoleLines, filterConsoleOutput, newestErrorBlock, type ConsoleSeverity } from "../consoleText";
 import { appendConsoleSnapshot } from "../../electron/consoleViewModel";
 import { parseConsoleSourceLocations, type ConsoleSourceLocationRequest } from "../../electron/consoleSourceParser";
+import { isCfxGameRenderProcessName, selectAutoAttachCandidate } from "../../electron/windowEmbedValidation";
 import ContextMenu from "./ContextMenu";
 
 export type CenterTab = "viewport" | "console" | "resources" | "editor";
@@ -49,6 +50,7 @@ interface CenterPaneProps {
   onConsoleRefreshIntervalChange: (intervalMs: number) => Promise<void>;
   resourceLifecycleAvailable: boolean | null;
   clientLabel: string;
+  clientAutoAttachRequest: { target: CfxTarget; launchPid: number | null; nonce: number } | null;
   activeCfxTarget: CfxTarget;
   editorPreferences: EditorPreferences;
   resolvedTheme: ResolvedTheme;
@@ -97,6 +99,7 @@ export default function CenterPane({
   onConsoleRefreshIntervalChange,
   resourceLifecycleAvailable,
   clientLabel,
+  clientAutoAttachRequest,
   activeCfxTarget,
   editorPreferences,
   resolvedTheme,
@@ -284,7 +287,11 @@ export default function CenterPane({
             embedded Cfx.re client window (and the console's fetched output) survive switching
             to/from a file tab instead of being torn down and rebuilt every time. */}
         <div style={{ flex: 1, minHeight: 0, display: centerTab === "viewport" ? "flex" : "none" }}>
-          <ViewportSection active={centerTab === "viewport"} clientLabel={clientLabel} />
+          <ViewportSection
+            active={centerTab === "viewport"}
+            clientLabel={clientLabel}
+            autoAttachRequest={clientAutoAttachRequest}
+          />
         </div>
         <div style={{ flex: 1, minHeight: 0, display: centerTab === "console" ? "flex" : "none" }}>
           <ConsoleSection
@@ -1327,20 +1334,207 @@ function ResourceCompareSection({
 interface ViewportSectionProps {
   active: boolean;
   clientLabel: string;
+  autoAttachRequest: { target: CfxTarget; launchPid: number | null; nonce: number } | null;
 }
 
-function ViewportSection({ active, clientLabel }: ViewportSectionProps) {
-  const [attachedTitle, setAttachedTitle] = useState<string | null>(null);
+function ViewportSection({ active, clientLabel, autoAttachRequest }: ViewportSectionProps) {
+  const [attachedWindow, setAttachedWindow] = useState<WindowCandidate | null>(null);
   const [detachPending, setDetachPending] = useState(false);
   const [embedError, setEmbedError] = useState<string | null>(null);
+  const [activeAutoAttachRequest, setActiveAutoAttachRequest] = useState<ViewportSectionProps["autoAttachRequest"]>(null);
+  const lastAutoAttachNonce = useRef<number | null>(null);
+  const automaticRun = useRef(0);
+  const handleManualAttached = useCallback((candidate: WindowCandidate) => {
+    automaticRun.current += 1;
+    setEmbedError(null);
+    setActiveAutoAttachRequest(null);
+    setAttachedWindow(candidate);
+  }, []);
+
+  useEffect(() => {
+    if (!autoAttachRequest || lastAutoAttachNonce.current === autoAttachRequest.nonce) return;
+    lastAutoAttachNonce.current = autoAttachRequest.nonce;
+    setActiveAutoAttachRequest(autoAttachRequest);
+  }, [autoAttachRequest]);
+
+  // A Studio-initiated launch is a lifecycle rather than a one-shot scan:
+  // dock FiveM.exe/RedM.exe as soon as its browser appears, promote the viewport
+  // to the separate GTA/RDR render process when joining a server, then fall back
+  // to the still-running browser if the game process exits.
+  useEffect(() => {
+    if (!activeAutoAttachRequest) return;
+    const run = ++automaticRun.current;
+    const isCurrent = () => automaticRun.current === run;
+    let timer: number | null = null;
+    let wakeTimer: (() => void) | null = null;
+    let pendingGamePid: number | null = null;
+    let pendingGameSince = 0;
+
+    const waitForNextScan = () => new Promise<void>((resolve) => {
+      wakeTimer = resolve;
+      timer = window.setTimeout(() => {
+        timer = null;
+        wakeTimer = null;
+        resolve();
+      }, AUTO_ATTACH_POLL_MS);
+    });
+
+    void (async () => {
+      let current: WindowCandidate | null = null;
+      setEmbedError(null);
+      try {
+        await window.api.windowEmbed.detach();
+        if (!isCurrent()) return;
+        setAttachedWindow(null);
+
+        while (isCurrent()) {
+          if (current) {
+            const status = await window.api.windowEmbed.status();
+            if (!isCurrent()) return;
+            if (!status.attached) {
+              current = null;
+              setAttachedWindow(null);
+            } else if (
+              status.pid
+              && status.processName
+              && status.pid !== current.pid
+            ) {
+              current = {
+                id: `attached:${status.pid}`,
+                pid: status.pid,
+                processName: status.processName,
+                title: status.title ?? status.processName,
+              };
+              setAttachedWindow(current);
+            }
+          }
+
+          const found = await window.api.windowEmbed.listCandidates();
+          if (!isCurrent()) return;
+          const matchingLaunch = found.filter((candidate) => (
+            isCfxGameRenderProcessName(candidate.processName, activeAutoAttachRequest.target)
+            || activeAutoAttachRequest.launchPid === null
+            || candidate.pid === activeAutoAttachRequest.launchPid
+          ));
+          let preferred = selectAutoAttachCandidate(matchingLaunch, activeAutoAttachRequest.target);
+          const currentIsGame = current
+            ? isCfxGameRenderProcessName(current.processName, activeAutoAttachRequest.target)
+            : false;
+          let preferredIsGame = preferred
+            ? isCfxGameRenderProcessName(preferred.processName, activeAutoAttachRequest.target)
+            : false;
+
+          // GTA creates and repeatedly reconfigures its render window during
+          // startup. Once that window appears, fully detach the FiveM browser
+          // and leave GTA alone for 30 seconds. Attaching only after that quiet
+          // period preserves the working overlay sizing/input path without
+          // participating in the startup resize fight.
+          let gameAttachReady = true;
+          if (preferred && preferredIsGame && !currentIsGame) {
+            if (pendingGamePid !== preferred.pid) {
+              if (current) {
+                await window.api.windowEmbed.detach();
+                if (!isCurrent()) return;
+                current = null;
+                setAttachedWindow(null);
+              }
+              pendingGamePid = preferred.pid;
+              pendingGameSince = Date.now();
+            }
+            gameAttachReady = Date.now() - pendingGameSince >= AUTO_GAME_ATTACH_DELAY_MS;
+          } else if (!currentIsGame && pendingGamePid !== null) {
+            if (Date.now() - pendingGameSince < AUTO_GAME_ATTACH_DELAY_MS) {
+              // Do not reattach the launcher if GTA's top-level window briefly
+              // disappears while the render process is still starting.
+              preferred = null;
+              preferredIsGame = false;
+              gameAttachReady = false;
+            } else {
+              pendingGamePid = null;
+              pendingGameSince = 0;
+            }
+          }
+
+          const shouldAttach = preferred && (
+            !current
+            || (
+              !currentIsGame
+              && preferredIsGame
+            )
+          ) && gameAttachReady;
+
+          if (shouldAttach && preferred) {
+            const result = await window.api.windowEmbed.attach(preferred.id);
+            if (!isCurrent()) {
+              if (result.ok) await window.api.windowEmbed.detach();
+              return;
+            }
+            if (result.ok) {
+              current = preferred;
+              pendingGamePid = null;
+              pendingGameSince = 0;
+              setAttachedWindow(preferred);
+              setEmbedError(null);
+            } else {
+              current = null;
+              setAttachedWindow(null);
+              setEmbedError(result.error ?? "The client window was found but could not be attached. Automatic capture will keep trying.");
+            }
+          }
+
+          await waitForNextScan();
+        }
+      } catch (error) {
+        if (isCurrent()) setEmbedError((error as Error).message || "Automatic viewport capture failed.");
+      }
+    })();
+
+    return () => {
+      if (automaticRun.current === run) automaticRun.current += 1;
+      if (timer !== null) window.clearTimeout(timer);
+      wakeTimer?.();
+    };
+  }, [activeAutoAttachRequest?.nonce]);
+
+  useEffect(() => {
+    if (!attachedWindow || activeAutoAttachRequest) return;
+    let cancelled = false;
+    let timer: number | null = null;
+    const checkAttachment = async () => {
+      try {
+        const current = await window.api.windowEmbed.status();
+        if (cancelled) return;
+        if (!current.attached) {
+          setAttachedWindow(null);
+          return;
+        }
+      } catch (error) {
+        if (!cancelled) setEmbedError((error as Error).message || "Could not verify the attached game window.");
+      }
+      if (!cancelled) timer = window.setTimeout(() => void checkAttachment(), 1_500);
+    };
+    timer = window.setTimeout(() => void checkAttachment(), 1_500);
+    return () => {
+      cancelled = true;
+      if (timer !== null) window.clearTimeout(timer);
+    };
+  }, [activeAutoAttachRequest, attachedWindow]);
+
+  function cancelAutomaticCapture() {
+    automaticRun.current += 1;
+    setActiveAutoAttachRequest(null);
+    setEmbedError(null);
+  }
 
   async function detach() {
     if (detachPending) return;
+    automaticRun.current += 1;
+    setActiveAutoAttachRequest(null);
     setDetachPending(true);
     setEmbedError(null);
     try {
       await window.api.windowEmbed.detach();
-      setAttachedTitle(null);
+      setAttachedWindow(null);
     } catch (error) {
       // Keep the attached state visible/actionable when native detach fails.
       setEmbedError((error as Error).message || "Failed to detach the embedded window.");
@@ -1356,9 +1550,14 @@ function ViewportSection({ active, clientLabel }: ViewportSectionProps) {
           so any control that must stay clickable while attached needs to live structurally
           outside that rect, not just visually above it with a small margin. */}
       <div style={{ display: "flex", gap: 6, marginBottom: 8, alignItems: "center" }}>
-        {attachedTitle && (
+        {attachedWindow && (
           <>
-            <span style={{ fontSize: 12, color: "var(--text-dim)" }}>Attached: {attachedTitle}</span>
+            <span style={{ fontSize: 12, color: "var(--text-dim)" }}>
+              Attached: {attachedWindow.title || attachedWindow.processName}
+              {activeAutoAttachRequest && !isCfxGameRenderProcessName(attachedWindow.processName, activeAutoAttachRequest.target)
+                ? " — watching for the game window…"
+                : ""}
+            </span>
             <button className="btn small" onClick={() => void detach()} disabled={detachPending}>
               {detachPending ? "Detaching…" : "Detach"}
             </button>
@@ -1366,15 +1565,17 @@ function ViewportSection({ active, clientLabel }: ViewportSectionProps) {
         )}
       </div>
       {embedError && <div className="error-text" role="alert">{embedError}</div>}
-      {attachedTitle ? (
-        <EmbedSurface active={active} />
+      {attachedWindow ? (
+        <EmbedSurface
+          active={active}
+          attachmentIdentity={`${attachedWindow.pid}:${attachedWindow.processName}`}
+        />
       ) : (
         <EmbedPicker
           clientLabel={clientLabel}
-          onAttached={(title) => {
-            setEmbedError(null);
-            setAttachedTitle(title);
-          }}
+          automaticScanning={activeAutoAttachRequest !== null}
+          onCancelAutomaticScan={cancelAutomaticCapture}
+          onAttached={handleManualAttached}
         />
       )}
     </div>
@@ -1383,7 +1584,7 @@ function ViewportSection({ active, clientLabel }: ViewportSectionProps) {
 
 /** Just the measured placeholder for the currently-attached native window — no text, no buttons,
  * nothing that a slightly-imprecise embed rect could end up covering. */
-function EmbedSurface({ active }: { active: boolean }) {
+function EmbedSurface({ active, attachmentIdentity }: { active: boolean; attachmentIdentity: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Measure only when layout can actually change. The old perpetual rAF loop sent 60 IPC calls
@@ -1425,16 +1626,18 @@ function EmbedSurface({ active }: { active: boolean }) {
     };
   }, [active]);
 
-  // Safety net — the authoritative cleanup is main.ts's window-all-closed handler,
-  // this just covers the component unmounting while the app stays alive.
+  // Attaching a different native process does not necessarily resize this DOM
+  // element, so ResizeObserver has nothing to report. Re-send the current
+  // rectangle once for the new attachment without remounting EmbedSurface.
+  // Remounting used to run a cleanup that could detach the newly attached GTA
+  // window during the FiveM -> GTA handoff.
   useEffect(() => {
-    return () => {
-      void window.api.windowEmbed.detach().catch(() => {
-        // Component teardown has no remaining UI to recover; main-process
-        // window cleanup remains the authoritative safety net.
-      });
-    };
-  }, []);
+    if (!active || !containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    const values = [rect.x, rect.y, rect.width, rect.height].map((value) => Math.round(value * dpr));
+    void window.api.windowEmbed.setRect(values[0], values[1], values[2], values[3], true);
+  }, [active, attachmentIdentity]);
 
   return (
     // alignSelf/width here override .viewport-frame's `align-items: center` — without them this
@@ -1446,7 +1649,17 @@ function EmbedSurface({ active }: { active: boolean }) {
   );
 }
 
-function EmbedPicker({ clientLabel, onAttached }: { clientLabel: string; onAttached: (title: string) => void }) {
+interface EmbedPickerProps {
+  clientLabel: string;
+  automaticScanning: boolean;
+  onCancelAutomaticScan: () => void;
+  onAttached: (candidate: WindowCandidate) => void;
+}
+
+const AUTO_ATTACH_POLL_MS = 1_500;
+const AUTO_GAME_ATTACH_DELAY_MS = 30_000;
+
+function EmbedPicker({ clientLabel, automaticScanning, onCancelAutomaticScan, onAttached }: EmbedPickerProps) {
   const [candidates, setCandidates] = useState<WindowCandidate[]>([]);
   const [scanning, setScanning] = useState(false);
   const [attachingId, setAttachingId] = useState<string | null>(null);
@@ -1472,7 +1685,7 @@ function EmbedPicker({ clientLabel, onAttached }: { clientLabel: string; onAttac
     setError(null);
     try {
       const result = await window.api.windowEmbed.attach(candidate.id);
-      if (result.ok) onAttached(candidate.title || candidate.processName);
+      if (result.ok) onAttached(candidate);
       else setError(result.error ?? "Failed to attach to that window.");
     } catch (attachError) {
       setError((attachError as Error).message || "Failed to attach to that window.");
@@ -1484,9 +1697,14 @@ function EmbedPicker({ clientLabel, onAttached }: { clientLabel: string; onAttac
   return (
     <div>
       <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-        <button className="btn small primary" onClick={scan} disabled={scanning || attachingId !== null}>
-          {scanning ? "Scanning…" : `Scan for ${clientLabel} window`}
+        <button
+          className="btn small primary"
+          onClick={automaticScanning ? onCancelAutomaticScan : scan}
+          disabled={attachingId !== null || (scanning && !automaticScanning)}
+        >
+          {automaticScanning ? "Cancel automatic capture" : scanning ? "Scanning…" : `Scan for ${clientLabel} window`}
         </button>
+        {automaticScanning && <span style={{ fontSize: 12, color: "var(--text-dim)" }}>Waiting until the game starts…</span>}
       </div>
       {error && <div className="error-text">{error}</div>}
       {candidates.length > 0 && (

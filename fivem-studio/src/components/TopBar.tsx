@@ -9,13 +9,14 @@ interface TopBarProps {
   onOpenSettings: () => void;
   onLaunchServer: () => void;
   onStopServer: () => void;
+  onRestartServer: () => void;
   onLaunchClient: () => void;
   onOpenWorkspace: () => void;
   activeTarget: CfxTarget;
   serverTarget: CfxTarget;
   activeServerPath: string | null;
   serverConfigured: boolean;
-  serverAction: "starting" | "stopping" | null;
+  serverAction: "starting" | "stopping" | "restarting" | null;
   serverRunning: boolean;
   serverPids: number[];
   serverStartedAt: number | null;
@@ -34,6 +35,7 @@ export default function TopBar({
   onOpenSettings,
   onLaunchServer,
   onStopServer,
+  onRestartServer,
   onLaunchClient,
   onOpenWorkspace,
   activeTarget,
@@ -126,6 +128,24 @@ export default function TopBar({
           {serverAction ? "…" : serverRunning ? "■" : "▶"}
         </span>
       </button>
+      {(serverRunning || serverAction === "restarting") && (
+        <button
+          className="btn topbar-action"
+          aria-label={serverAction === "restarting" ? `Restarting ${serverLabel} server` : `Restart ${serverLabel} server`}
+          onClick={onRestartServer}
+          disabled={serverAction !== null}
+          title={
+            serverStatusError
+              ? `Server status unavailable: ${serverStatusError}`
+              : `Stop and restart the ${serverLabel} local server`
+          }
+        >
+          <span className="topbar-label">
+            {serverAction === "restarting" ? `Restarting ${serverLabel} server…` : `↻ Restart ${serverLabel} server`}
+          </span>
+          <span className="topbar-compact" aria-hidden="true">{serverAction === "restarting" ? "…" : "↻"}</span>
+        </button>
+      )}
       <button className="btn topbar-action" aria-label={`Launch ${activeLabel}`} onClick={onLaunchClient} disabled={!activeClientPath} title={activeClientPath ?? `Set the ${activeLabel} ${clientExecutable} path in Settings`}>
         <span className="topbar-label">▶ Launch {activeLabel}</span>
         <span className="topbar-compact" aria-hidden="true">▶ C</span>
