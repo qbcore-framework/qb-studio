@@ -1,6 +1,7 @@
-// Embeds an external top-level window (the running FiveM or RedM game client) into
-// Studio's own window, using raw Win32 window management — SetParent,
-// SetWindowLongPtr, SetWindowPos — via koffi bindings to user32.dll. This
+// Places an external FiveM/RedM window in Studio's viewport using raw Win32
+// window management. Launcher/browser windows become real children; game render
+// surfaces use an owned borderless overlay so they retain raw keyboard input.
+// SetParent, SetWindowLongPtr and SetWindowPos are called through user32.dll. This
 // does not touch the target process's memory in any way; it's the same kind
 // of operation any window-docking/tiling utility performs.
 //
@@ -46,8 +47,20 @@ const SetParent = user32.func("HWND __stdcall SetParent(HWND hWndChild, HWND hWn
 const SetWindowPos = user32.func(
   "bool __stdcall SetWindowPos(HWND hWnd, HWND hWndInsertAfter, int X, int Y, int cx, int cy, uint32_t uFlags)",
 );
+const GetParent = user32.func("HWND __stdcall GetParent(HWND hWnd)");
+const RECT = koffi.struct("WINDOW_EMBED_RECT", {
+  left: "long",
+  top: "long",
+  right: "long",
+  bottom: "long",
+});
+const POINT = koffi.struct("WINDOW_EMBED_POINT", { x: "long", y: "long" });
+const GetWindowRect = user32.func("bool __stdcall GetWindowRect(HWND hWnd, _Out_ WINDOW_EMBED_RECT *lpRect)");
+const ScreenToClient = user32.func("bool __stdcall ScreenToClient(HWND hWnd, _Inout_ WINDOW_EMBED_POINT *lpPoint)");
+const ClientToScreen = user32.func("bool __stdcall ClientToScreen(HWND hWnd, _Inout_ WINDOW_EMBED_POINT *lpPoint)");
 const ShowWindow = user32.func("bool __stdcall ShowWindow(HWND hWnd, int nCmdShow)");
 const SetForegroundWindow = user32.func("bool __stdcall SetForegroundWindow(HWND hWnd)");
+const SetActiveWindow = user32.func("HWND __stdcall SetActiveWindow(HWND hWnd)");
 const SetFocus = user32.func("HWND __stdcall SetFocus(HWND hWnd)");
 const AttachThreadInput = user32.func("bool __stdcall AttachThreadInput(uint32_t idAttach, uint32_t idAttachTo, bool fAttach)");
 const GetCurrentThreadId = kernel32.func("uint32_t __stdcall GetCurrentThreadId()");
@@ -64,6 +77,8 @@ try {
 
 const GW_HWNDNEXT = 2;
 const GWL_STYLE = -16;
+const GWL_EXSTYLE = -20;
+const GWLP_HWNDPARENT = -8;
 const WS_CHILD = 0x40000000;
 const WS_POPUP = 0x80000000;
 const WS_CAPTION = 0x00c00000;
@@ -71,6 +86,8 @@ const WS_THICKFRAME = 0x00040000;
 const WS_SYSMENU = 0x00080000;
 const WS_MINIMIZEBOX = 0x00020000;
 const WS_MAXIMIZEBOX = 0x00010000;
+const WS_EX_TOOLWINDOW = 0x00000080;
+const WS_EX_APPWINDOW = 0x00040000;
 const SWP_NOSIZE = 0x0001;
 const SWP_NOMOVE = 0x0002;
 const SWP_NOZORDER = 0x0004;
@@ -170,17 +187,37 @@ export async function listCandidates(): Promise<WindowCandidate[]> {
  * threads if the calling and target threads share input state, hence AttachThreadInput around them
  * — the standard, well-documented pattern for focusing a window owned by another process/thread.
  */
-function focusEmbeddedWindow(hwnd: bigint): void {
+function focusEmbeddedWindow(value: NonNullable<typeof attached>): void {
   try {
-    const { tid } = getWindowThreadAndPid(hwnd);
+    const targetTid = getWindowThreadAndPid(value.hwnd).tid;
+    const hostTid = getWindowThreadAndPid(value.parentHwnd).tid;
     const currentTid = GetCurrentThreadId() as number;
-    const needsAttach = tid !== 0 && tid !== currentTid;
-    if (needsAttach) AttachThreadInput(currentTid, tid, true);
-    SetForegroundWindow(hwnd);
-    SetFocus(hwnd);
-    if (needsAttach) AttachThreadInput(currentTid, tid, false);
+    const attachHost = hostTid !== 0 && hostTid !== currentTid;
+    const attachTarget = targetTid !== 0 && targetTid !== currentTid;
+    if (attachHost) AttachThreadInput(currentTid, hostTid, true);
+    if (attachTarget) AttachThreadInput(currentTid, targetTid, true);
+    const foregroundHwnd = value.mode === "overlay" ? value.hwnd : value.parentHwnd;
+    SetForegroundWindow(foregroundHwnd);
+    SetActiveWindow(foregroundHwnd);
+    SetFocus(value.hwnd);
+    if (attachTarget) AttachThreadInput(currentTid, targetTid, false);
+    if (attachHost) AttachThreadInput(currentTid, hostTid, false);
   } catch {
     // best-effort — worst case the user has to click/alt-tab into it once, same as before this fix
+  }
+}
+
+function focusTopLevelWindow(hwnd: bigint): void {
+  try {
+    const targetTid = getWindowThreadAndPid(hwnd).tid;
+    const currentTid = GetCurrentThreadId() as number;
+    const needsAttach = targetTid !== 0 && targetTid !== currentTid;
+    if (needsAttach) AttachThreadInput(currentTid, targetTid, true);
+    SetForegroundWindow(hwnd);
+    SetFocus(hwnd);
+    if (needsAttach) AttachThreadInput(currentTid, targetTid, false);
+  } catch {
+    // best-effort restoration for a manually detached external window
   }
 }
 
@@ -216,18 +253,213 @@ function withTargetDpiAwareness<T>(hwnd: bigint, fn: () => T): T {
 
 interface AttachedWindow {
   hwnd: bigint;
+  parentHwnd: bigint;
+  mode: "child" | "overlay";
   pid: number;
+  processName: string;
+  title: string;
   originalStyle: number;
+  originalExStyle: number;
+  originalParent: bigint | null;
+  originalRect: { x: number; y: number; width: number; height: number };
+  wasOriginallyVisible: boolean;
+  embeddedStyle: number;
+  embeddedExStyle: number;
   wasVisible: boolean;
   lastRect: { x: number; y: number; width: number; height: number } | null;
 }
 
 let attached: AttachedWindow | null = null;
+let parkedLauncher: AttachedWindow | null = null;
+let maintenanceTimer: ReturnType<typeof setInterval> | null = null;
+
+function stopMaintenanceTimer(): void {
+  if (maintenanceTimer === null) return;
+  clearInterval(maintenanceTimer);
+  maintenanceTimer = null;
+}
 
 function attachedWindowStillOwned(value: NonNullable<typeof attached>): boolean {
   if (!IsWindow(value.hwnd)) return false;
   const { tid, pid } = getWindowThreadAndPid(value.hwnd);
   return tid !== 0 && pid === value.pid;
+}
+
+function isBootstrapProcessName(processName: string): boolean {
+  return /^(fivem|redm)\.exe$/i.test(processName.trim());
+}
+
+function isGameRenderProcessName(processName: string): boolean {
+  const name = processName.trim();
+  return /^(gta5|rdr2)/i.test(name) || /gtaprocess/i.test(name);
+}
+
+function readWindowRect(hwnd: bigint): AttachedWindow["originalRect"] {
+  const rect = { left: 0, top: 0, right: 0, bottom: 0 };
+  if (!GetWindowRect(hwnd, rect)) return { x: 0, y: 0, width: 0, height: 0 };
+  return { x: rect.left, y: rect.top, width: rect.right - rect.left, height: rect.bottom - rect.top };
+}
+
+function getWindowOwner(hwnd: bigint): bigint | null {
+  const raw = GetWindowLongPtr(hwnd, GWLP_HWNDPARENT) as number | bigint;
+  const value = typeof raw === "bigint" ? raw : BigInt(raw);
+  return value === 0n ? null : value;
+}
+
+function setWindowOwner(hwnd: bigint, owner: bigint | null): void {
+  SetWindowLongPtr(hwnd, GWLP_HWNDPARENT, owner ?? 0n);
+}
+
+function parkAttachedLauncher(): void {
+  if (!attached) return;
+  ShowWindow(attached.hwnd, SW_HIDE);
+  attached.wasVisible = false;
+  parkedLauncher = attached;
+  attached = null;
+}
+
+function restoreExternalWindow(value: AttachedWindow, focus: boolean): void {
+  if (!attachedWindowStillOwned(value)) return;
+  SetWindowLongPtr(value.hwnd, GWL_STYLE, value.originalStyle);
+  SetWindowLongPtr(value.hwnd, GWL_EXSTYLE, value.originalExStyle);
+  if (value.mode === "overlay") setWindowOwner(value.hwnd, value.originalParent);
+  else SetParent(value.hwnd, value.originalParent);
+  const rect = value.originalRect;
+  withTargetDpiAwareness(value.hwnd, () =>
+    SetWindowPos(
+      value.hwnd,
+      null,
+      rect.x,
+      rect.y,
+      rect.width,
+      rect.height,
+      SWP_NOZORDER | SWP_FRAMECHANGED | SWP_NOACTIVATE,
+    ),
+  );
+  ShowWindow(value.hwnd, value.wasOriginallyVisible ? SW_SHOWNOACTIVATE : SW_HIDE);
+  if (focus && value.wasOriginallyVisible) focusTopLevelWindow(value.hwnd);
+}
+
+function resumeParkedLauncher(): boolean {
+  const value = parkedLauncher;
+  parkedLauncher = null;
+  if (!value || !attachedWindowStillOwned(value) || !value.lastRect) return false;
+  attached = value;
+  value.wasVisible = true;
+  SetWindowLongPtr(value.hwnd, GWL_STYLE, value.embeddedStyle);
+  SetWindowLongPtr(value.hwnd, GWL_EXSTYLE, value.embeddedExStyle);
+  if (value.mode === "overlay") setWindowOwner(value.hwnd, value.parentHwnd);
+  else SetParent(value.hwnd, value.parentHwnd);
+  positionAttachedWindow(value, value.lastRect);
+  ShowWindow(value.hwnd, SW_SHOWNOACTIVATE);
+  focusEmbeddedWindow(value);
+  return true;
+}
+
+function positionAttachedWindow(
+  value: NonNullable<typeof attached>,
+  rect: { x: number; y: number; width: number; height: number },
+): void {
+  withTargetDpiAwareness(value.hwnd, () => {
+    const topLeft = { x: rect.x, y: rect.y };
+    if (value.mode === "overlay" && !ClientToScreen(value.parentHwnd, topLeft)) return false;
+    SetWindowPos(
+      value.hwnd,
+      null,
+      topLeft.x,
+      topLeft.y,
+      rect.width,
+      rect.height,
+      SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED,
+    );
+    return true;
+  });
+}
+
+function currentAttachedRect(value: NonNullable<typeof attached>): AttachedWindow["lastRect"] {
+  return withTargetDpiAwareness(value.hwnd, () => {
+    const windowRect = { left: 0, top: 0, right: 0, bottom: 0 };
+    if (!GetWindowRect(value.hwnd, windowRect)) return null;
+    const topLeft = { x: windowRect.left, y: windowRect.top };
+    if (!ScreenToClient(value.parentHwnd, topLeft)) return null;
+    return {
+      x: topLeft.x,
+      y: topLeft.y,
+      width: windowRect.right - windowRect.left,
+      height: windowRect.bottom - windowRect.top,
+    };
+  });
+}
+
+function maintainAttachment(): boolean {
+  const value = attached;
+  if (!value) {
+    if (resumeParkedLauncher()) return true;
+    stopMaintenanceTimer();
+    return false;
+  }
+  if (!attachedWindowStillOwned(value)) {
+    attached = null;
+    if (resumeParkedLauncher()) return true;
+    stopMaintenanceTimer();
+    return false;
+  }
+
+  // GTA can restore fullscreen state well after its render window appears.
+  // Keep this repair in Electron's main process: once a native surface covers
+  // Chromium, renderer timers and IPC health polling are not dependable.
+  if (value.wasVisible && value.lastRect) {
+    const actualParent = value.mode === "overlay" ? getWindowOwner(value.hwnd) : GetParent(value.hwnd);
+    const parentChanged = actualParent !== value.parentHwnd;
+    const actualStyle = Number(GetWindowLongPtr(value.hwnd, GWL_STYLE)) >>> 0;
+    const styleChanged = actualStyle !== value.embeddedStyle;
+    const actualExStyle = Number(GetWindowLongPtr(value.hwnd, GWL_EXSTYLE)) >>> 0;
+    const exStyleChanged = actualExStyle !== value.embeddedExStyle;
+    if (styleChanged) SetWindowLongPtr(value.hwnd, GWL_STYLE, value.embeddedStyle);
+    if (exStyleChanged) SetWindowLongPtr(value.hwnd, GWL_EXSTYLE, value.embeddedExStyle);
+    if (parentChanged) {
+      if (value.mode === "overlay") setWindowOwner(value.hwnd, value.parentHwnd);
+      else SetParent(value.hwnd, value.parentHwnd);
+    }
+    const actual = currentAttachedRect(value);
+    const desired = value.lastRect;
+    if (
+      parentChanged
+      ||
+      styleChanged
+      ||
+      exStyleChanged
+      ||
+      !actual
+      || actual.x !== desired.x
+      || actual.y !== desired.y
+      || actual.width !== desired.width
+      || actual.height !== desired.height
+    ) {
+      positionAttachedWindow(value, desired);
+    }
+  }
+  return true;
+}
+
+function startMaintenanceTimer(): void {
+  if (maintenanceTimer !== null) return;
+  maintenanceTimer = setInterval(() => {
+    try {
+      maintainAttachment();
+    } catch {
+      // The renderer's status call still reports a stale/dead HWND. A single
+      // best-effort native repair failure must not terminate the main process.
+    }
+  }, 250);
+  maintenanceTimer.unref?.();
+}
+
+export function status(): { attached: boolean; pid?: number; processName?: string; title?: string } {
+  const isAttached = maintainAttachment();
+  return isAttached && attached
+    ? { attached: true, pid: attached.pid, processName: attached.processName, title: attached.title }
+    : { attached: false };
 }
 
 async function resolveCurrentCandidate(candidateId: string): Promise<{ hwnd: bigint; candidate: DiscoveredWindowCandidate } | null> {
@@ -258,8 +490,6 @@ export async function attach(candidateId: string, win: BrowserWindow): Promise<{
     const initial = await resolveCurrentCandidate(candidateId);
     if (!initial) return { ok: false, error: "That window is no longer an approved Cfx client candidate. Scan again and select it from the list." };
 
-    detach();
-
     // detach() can take long enough for a target to exit, so make the final
     // identity check directly before changing its parent or style.
     const current = await resolveCurrentCandidate(candidateId);
@@ -268,19 +498,58 @@ export async function attach(candidateId: string, win: BrowserWindow): Promise<{
     }
 
     const hwnd = current.hwnd;
-    const originalStyle = GetWindowLongPtr(hwnd, GWL_STYLE) as number;
-    const newStyle =
-      (originalStyle & ~WS_POPUP & ~WS_CAPTION & ~WS_THICKFRAME & ~WS_SYSMENU & ~WS_MINIMIZEBOX & ~WS_MAXIMIZEBOX) | WS_CHILD;
+    const promoteLauncher = Boolean(
+      attached
+      && isBootstrapProcessName(attached.processName)
+      && isGameRenderProcessName(current.candidate.processName),
+    );
+    if (promoteLauncher) parkAttachedLauncher();
+    else detach();
+
+    const mode: AttachedWindow["mode"] = isGameRenderProcessName(current.candidate.processName) ? "overlay" : "child";
+    const originalStyle = Number(GetWindowLongPtr(hwnd, GWL_STYLE)) >>> 0;
+    const originalExStyle = Number(GetWindowLongPtr(hwnd, GWL_EXSTYLE)) >>> 0;
+    const originalParent = mode === "overlay" ? getWindowOwner(hwnd) : GetParent(hwnd);
+    const originalRect = readWindowRect(hwnd);
+    const wasOriginallyVisible = Boolean(IsWindowVisible(hwnd));
+    const newStyle = mode === "overlay"
+      ? ((originalStyle & ~WS_CHILD & ~WS_CAPTION & ~WS_THICKFRAME & ~WS_SYSMENU & ~WS_MINIMIZEBOX & ~WS_MAXIMIZEBOX) | WS_POPUP) >>> 0
+      : ((originalStyle & ~WS_POPUP & ~WS_CAPTION & ~WS_THICKFRAME & ~WS_SYSMENU & ~WS_MINIMIZEBOX & ~WS_MAXIMIZEBOX) | WS_CHILD) >>> 0;
+    const newExStyle = mode === "overlay"
+      ? ((originalExStyle | WS_EX_TOOLWINDOW) & ~WS_EX_APPWINDOW) >>> 0
+      : originalExStyle;
     SetWindowLongPtr(hwnd, GWL_STYLE, newStyle);
+    SetWindowLongPtr(hwnd, GWL_EXSTYLE, newExStyle);
 
     const parentHandle = win.getNativeWindowHandle().readBigUInt64LE(0);
-    SetParent(hwnd, parentHandle);
-    withTargetDpiAwareness(hwnd, () => SetWindowPos(hwnd, null, 0, 0, 0, 0, SWP_NOZORDER | SWP_FRAMECHANGED | SWP_NOACTIVATE));
+    if (mode === "overlay") setWindowOwner(hwnd, parentHandle);
+    else SetParent(hwnd, parentHandle);
+    withTargetDpiAwareness(hwnd, () =>
+      SetWindowPos(hwnd, null, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED | SWP_NOACTIVATE),
+    );
 
-    attached = { hwnd, pid: current.candidate.pid, originalStyle, wasVisible: false, lastRect: null };
+    attached = {
+      hwnd,
+      parentHwnd: parentHandle,
+      mode,
+      pid: current.candidate.pid,
+      processName: current.candidate.processName,
+      title: getWindowTitle(hwnd),
+      originalStyle,
+      originalExStyle,
+      originalParent,
+      originalRect,
+      wasOriginallyVisible,
+      embeddedStyle: newStyle,
+      embeddedExStyle: newExStyle,
+      wasVisible: false,
+      lastRect: null,
+    };
+    startMaintenanceTimer();
     return { ok: true };
   } catch (err) {
     attached = null;
+    if (resumeParkedLauncher()) startMaintenanceTimer();
     return { ok: false, error: (err as Error).message };
   }
 }
@@ -310,37 +579,27 @@ export function setRect(x: number, y: number, width: number, height: number, vis
     attached.lastRect.width !== nextRect.width ||
     attached.lastRect.height !== nextRect.height;
   if (rectChanged) {
-    withTargetDpiAwareness(attached.hwnd, () =>
-      SetWindowPos(
-        attached!.hwnd,
-        null,
-        nextRect.x,
-        nextRect.y,
-        nextRect.width,
-        nextRect.height,
-        SWP_NOZORDER | SWP_NOACTIVATE,
-      ),
-    );
+    positionAttachedWindow(attached, nextRect);
     attached.lastRect = nextRect;
   }
   if (risingEdge) ShowWindow(attached.hwnd, SW_SHOWNOACTIVATE);
   attached.wasVisible = true;
-  if (risingEdge) focusEmbeddedWindow(attached.hwnd);
+  if (risingEdge) focusEmbeddedWindow(attached);
 }
 
 export function detach(): void {
-  if (!attached) return;
+  if (!attached && !parkedLauncher) {
+    stopMaintenanceTimer();
+    return;
+  }
   const previous = attached;
+  const previousParked = parkedLauncher;
   attached = null;
-  if (!attachedWindowStillOwned(previous)) return;
-  const hwnd = previous.hwnd;
+  parkedLauncher = null;
+  stopMaintenanceTimer();
   try {
-    SetWindowLongPtr(hwnd, GWL_STYLE, previous.originalStyle);
-    SetParent(hwnd, null);
-    SetWindowPos(hwnd, null, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED | SWP_NOACTIVATE);
-    // Handing it back as a normal top-level window doesn't by itself give it real focus again —
-    // without this it can come back stuck in the same paused/black-box state embedding leaves it in.
-    focusEmbeddedWindow(hwnd);
+    if (previousParked) restoreExternalWindow(previousParked, false);
+    if (previous) restoreExternalWindow(previous, true);
   } catch {
     // best-effort — if the target process is already gone there's nothing left to restore
   }
@@ -350,5 +609,15 @@ export function detach(): void {
  * back from another app) — the internal tab-switch rising-edge in setRect() doesn't cover this,
  * since Studio's own window can regain focus without any of our tabs changing. */
 export function onHostFocusGained(): void {
-  if (attached && attached.wasVisible && attachedWindowStillOwned(attached)) focusEmbeddedWindow(attached.hwnd);
+  if (!attached || !attached.wasVisible || !attachedWindowStillOwned(attached)) return;
+  const value = attached;
+  setTimeout(() => {
+    if (attached === value && value.wasVisible && attachedWindowStillOwned(value)) {
+      maintainAttachment();
+      // A game overlay becomes the foreground input window when the user clicks
+      // it. Do not steal focus back from Studio's editor/chat merely because the
+      // owner window activated. True child embeds still need explicit focus.
+      if (value.mode === "child") focusEmbeddedWindow(value);
+    }
+  }, 50).unref?.();
 }

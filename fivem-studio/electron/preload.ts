@@ -115,6 +115,7 @@ const api = {
   },
   windowEmbed: {
     listCandidates: () => ipcRenderer.invoke("windowEmbed:listCandidates"),
+    status: () => ipcRenderer.invoke("windowEmbed:status"),
     attach: (candidateId: string) => ipcRenderer.invoke("windowEmbed:attach", candidateId),
     detach: () => ipcRenderer.invoke("windowEmbed:detach"),
     setRect: (x: number, y: number, width: number, height: number, visible: boolean) =>
@@ -169,6 +170,7 @@ const api = {
     status: () => ipcRenderer.invoke("server:status"),
     launch: () => ipcRenderer.invoke("server:launch"),
     stop: (target: "legacy" | "enhanced" | "redm") => ipcRenderer.invoke("server:stop", target),
+    restart: (target: "legacy" | "enhanced" | "redm") => ipcRenderer.invoke("server:restart", target),
     crashReport: () => ipcRenderer.invoke("server:crashReport"),
     notifyUnexpectedExit: (target: "legacy" | "enhanced" | "redm") => ipcRenderer.invoke("server:notifyUnexpectedExit", target),
   },

@@ -649,6 +649,7 @@ declare global {
       };
       windowEmbed: {
         listCandidates(): Promise<WindowCandidate[]>;
+        status(): Promise<{ attached: boolean; pid?: number; processName?: string; title?: string }>;
         attach(candidateId: string): Promise<AttachResult>;
         detach(): Promise<void>;
         setRect(x: number, y: number, width: number, height: number, visible: boolean): Promise<void>;
@@ -692,12 +693,13 @@ declare global {
         cloneRepo(repoUrl: string, projectRoot: string): Promise<CloneResult>;
       };
       cfx: {
-        launch(target: CfxTarget): Promise<{ ok: boolean; target: CfxTarget }>;
+        launch(target: CfxTarget): Promise<{ ok: boolean; target: CfxTarget; launchPid: number | null }>;
       };
       server: {
         status(): Promise<{ running: boolean; pids: number[]; target: CfxTarget }>;
         launch(): Promise<{ pid: number; controlProfile: string | null; alreadyRunning: boolean; target: CfxTarget; recoveryNotice?: string }>;
         stop(target: CfxTarget): Promise<{ stoppedPids: number[]; alreadyStopped: boolean; target: CfxTarget }>;
+        restart(target: CfxTarget): Promise<{ pid: number; controlProfile: string | null; alreadyRunning: boolean; target: CfxTarget; recoveryNotice?: string }>;
         crashReport(): Promise<CrashReportSummary | null>;
         notifyUnexpectedExit(target: CfxTarget): Promise<{ shown: boolean }>;
       };

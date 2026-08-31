@@ -152,7 +152,7 @@ export default function App() {
   const [runtimeIdentity, setRuntimeIdentity] = useState<RuntimeIdentity | null>(null);
   const [workspaceMatch, setWorkspaceMatch] = useState<RuntimeWorkspaceMatch | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [serverAction, setServerAction] = useState<"starting" | "stopping" | null>(null);
+  const [serverAction, setServerAction] = useState<"starting" | "stopping" | "restarting" | null>(null);
   const [serverRunning, setServerRunning] = useState(false);
   const [serverPids, setServerPids] = useState<number[]>([]);
   const [serverTarget, setServerTarget] = useState<CfxTarget>("legacy");
@@ -254,6 +254,11 @@ export default function App() {
   // Viewport, not editor: with no files open yet, defaulting to "editor" leaves the
   // tab strip with nothing highlighted and an empty pane, which reads as a broken state.
   const [centerTab, setCenterTab] = useState<CenterTab>("viewport");
+  const [clientAutoAttachRequest, setClientAutoAttachRequest] = useState<{
+    target: CfxTarget;
+    launchPid: number | null;
+    nonce: number;
+  } | null>(null);
   const [selection, setSelection] = useState<{ path: string | null; selectedText: string; startLine: number; endLine: number }>({
     path: null,
     selectedText: "",
@@ -1323,7 +1328,13 @@ export default function App() {
   async function launchCfxClient() {
     if (!activeClientPath) return;
     try {
-      await window.api.cfx.launch(config.activeCfxTarget);
+      const result = await window.api.cfx.launch(config.activeCfxTarget);
+      setCenterTab("viewport");
+      setClientAutoAttachRequest((current) => ({
+        target: result.target,
+        launchPid: result.launchPid,
+        nonce: (current?.nonce ?? 0) + 1,
+      }));
     } catch (err) {
       alert((err as Error).message);
     }
@@ -1339,6 +1350,7 @@ export default function App() {
       if (result.recoveryNotice) setArtifactNotice(result.recoveryNotice);
       setServerRunning(true);
       observedServerRunning.current = true;
+      intentionalServerStop.current = false;
       serverLaunchedInIdentity.current = !result.alreadyRunning;
       setServerStartedAt(Date.now());
       setServerPids([result.pid]);
@@ -1382,6 +1394,42 @@ export default function App() {
     } catch (err) {
       intentionalServerStop.current = false;
       setServerNotice({ message: `Could not stop the local server: ${(err as Error).message}`, error: true });
+    } finally {
+      const settledEpoch = ++serverStatusEpoch.current;
+      await refreshServerStatus(settledEpoch);
+      setServerAction(null);
+    }
+  }
+
+  async function restartServer() {
+    if (!serverRunning || serverAction) return;
+    serverStatusEpoch.current += 1;
+    intentionalServerStop.current = true;
+    setServerAction("restarting");
+    setServerNotice(null);
+    try {
+      const result = await window.api.server.restart(serverTarget);
+      setServerRunning(false);
+      observedServerRunning.current = false;
+      serverLaunchedInIdentity.current = false;
+      setServerStartedAt(null);
+      setServerPids([]);
+      if (result.recoveryNotice) setArtifactNotice(result.recoveryNotice);
+      setServerRunning(true);
+      observedServerRunning.current = true;
+      intentionalServerStop.current = false;
+      serverLaunchedInIdentity.current = !result.alreadyRunning;
+      setServerStartedAt(Date.now());
+      setServerPids([result.pid]);
+      setServerTarget(result.target);
+      setServerStatusError(null);
+      setServerNotice({
+        message: `Restarted the ${cfxTargetLabel(result.target)} local server.`,
+        error: false,
+      });
+    } catch (err) {
+      intentionalServerStop.current = false;
+      setServerNotice({ message: `Could not restart the local server: ${(err as Error).message}`, error: true });
     } finally {
       const settledEpoch = ++serverStatusEpoch.current;
       await refreshServerStatus(settledEpoch);
@@ -1463,6 +1511,7 @@ export default function App() {
         onOpenSettings={openSettings}
         onLaunchServer={launchServer}
         onStopServer={stopServer}
+        onRestartServer={restartServer}
         onLaunchClient={launchCfxClient}
         onOpenWorkspace={() => resolved.profileRoot && void window.api.shell.showItemInFolder(resolved.profileRoot)}
         activeTarget={config.activeCfxTarget}
@@ -1605,6 +1654,7 @@ export default function App() {
               onConsoleRefreshIntervalChange={handleConsoleRefreshIntervalChange}
               resourceLifecycleAvailable={runtimeIdentity?.capabilities.resourceLifecycle ?? null}
               clientLabel={activeTargetLabel}
+              clientAutoAttachRequest={clientAutoAttachRequest}
               activeCfxTarget={config.activeCfxTarget}
               editorPreferences={config.editor}
               resolvedTheme={resolvedTheme}

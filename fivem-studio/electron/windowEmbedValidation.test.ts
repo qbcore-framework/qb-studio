@@ -3,8 +3,11 @@ import test from "node:test";
 
 import {
   getFreshCandidate,
+  isCfxBootstrapProcessName,
   isCfxClientProcessName,
+  isCfxGameRenderProcessName,
   matchesDiscoveredWindow,
+  selectAutoAttachCandidate,
   type DiscoveredWindowCandidate,
 } from "./windowEmbedValidation";
 
@@ -35,4 +38,26 @@ test("recognizes FiveM and RedM bootstrap and render processes", () => {
   }
   assert.equal(isCfxClientProcessName("explorer.exe"), false);
   assert.equal(isCfxClientProcessName("My RedM Notes.exe"), false);
+});
+
+test("automatic capture prefers game render surfaces and falls back to the launcher", () => {
+  assert.equal(isCfxBootstrapProcessName("FiveM.exe", "enhanced"), true);
+  assert.equal(isCfxBootstrapProcessName("FiveM.exe", "redm"), false);
+  assert.equal(isCfxBootstrapProcessName("RedM.exe", "redm"), true);
+  assert.equal(isCfxGameRenderProcessName("FiveM.exe", "legacy"), false);
+  assert.equal(isCfxGameRenderProcessName("FiveM_b3258_GTAProcess.exe", "legacy"), true);
+  assert.equal(isCfxGameRenderProcessName("GTA5_Enhanced.exe", "enhanced"), true);
+  assert.equal(isCfxGameRenderProcessName("RedM.exe", "redm"), false);
+  assert.equal(isCfxGameRenderProcessName("RedM_b1491_GTAProcess.exe", "redm"), true);
+  assert.equal(isCfxGameRenderProcessName("RDR2_b1491.exe", "redm"), true);
+  assert.equal(isCfxGameRenderProcessName("RDR2.exe", "legacy"), false);
+
+  const windows = [
+    { processName: "FiveM.exe", id: "bootstrap" },
+    { processName: "RDR2.exe", id: "wrong-game" },
+    { processName: "GTA5_Enhanced.exe", id: "render" },
+  ];
+  assert.equal(selectAutoAttachCandidate(windows, "enhanced")?.id, "render");
+  assert.equal(selectAutoAttachCandidate(windows, "redm")?.id, "wrong-game");
+  assert.equal(selectAutoAttachCandidate(windows.slice(0, 1), "legacy")?.id, "bootstrap");
 });

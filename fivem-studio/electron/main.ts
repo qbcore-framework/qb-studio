@@ -393,6 +393,70 @@ function artifactStatePath(target: CfxTarget): string {
   return path.join(app.getPath("userData"), `artifact-install-${target}.json`);
 }
 
+async function launchConfiguredServer(config: StudioConfig, target: CfxTarget) {
+  const executable = serverExeFor(config, target);
+  if (!executable) throw new Error(`Choose the ${cfxTargetLabel(target)} server executable in Settings first.`);
+  if (!config.txDataPath || !config.selectedProfile) throw new Error("Choose a txData workspace in Settings first.");
+  for (const otherTargetName of CFX_TARGETS) {
+    if (otherTargetName === target) continue;
+    const otherExecutable = serverExeFor(config, otherTargetName);
+    if (!otherExecutable || path.resolve(otherExecutable).toLowerCase() === path.resolve(executable).toLowerCase()) continue;
+    const otherTarget = resolveArtifactTarget(otherExecutable, config.txDataPath);
+    const otherPids = await findRunningServerPids(otherTarget.executablePath);
+    if (otherPids.length > 0) {
+      throw new Error(
+        `Stop the ${cfxTargetLabel(otherTargetName)} server before starting the ${cfxTargetLabel(target)} server on this workspace.`,
+      );
+    }
+  }
+  const workspaceRoot = activeProfileRoot();
+  const recoveryNotice = recoverInterruptedArtifactUpdate(executable, artifactStatePath(target));
+  const selectedArtifact = resolveArtifactTarget(executable, config.txDataPath);
+  const alreadyRunning = await findRunningServerPids(selectedArtifact.executablePath);
+  if (alreadyRunning.length === 0) {
+    const endpoint = parseLocalServerConfig(loadLocalServerConfig(workspaceRoot));
+    await assertFxServerPortAvailable(endpoint.host, endpoint.port);
+  }
+  let controlProfile = discoverTxAdminControlProfile(config.txDataPath, workspaceRoot);
+  if (target === "enhanced") {
+    if (alreadyRunning.length > 0) {
+      try {
+        assertTxAdminDataPath(config.txDataPath, workspaceRoot);
+        controlProfile = "default";
+      } catch (error) {
+        throw new Error(
+          "FiveM Enhanced is already running while txAdmin's default dataPath disagrees with the selected workspace. " +
+          `Stop the running server before switching workspaces. ${(error as Error).message}`,
+        );
+      }
+    } else {
+      const synchronized = synchronizeTxAdminDataPath(config.txDataPath, workspaceRoot);
+      controlProfile = synchronized.controlProfile;
+      if (synchronized.updated) {
+        // A runtime created while the stale profile was selected has no
+        // trustworthy txAdmin log source. Let its transport drop so the UI
+        // reconnects with the newly verified default control profile.
+        clearConsoleViews();
+        stopManagedRuntime();
+      }
+    }
+  }
+  const launched = await launchLocalServer(executable, config.txDataPath, controlProfile);
+  if (target === "enhanced") {
+    try {
+      assertTxAdminDataPath(config.txDataPath, workspaceRoot);
+    } catch (error) {
+      if (!launched.alreadyRunning) {
+        try { await stopLocalServer(executable, config.txDataPath); } catch { /* the path mismatch remains the primary failure */ }
+      }
+      throw new Error(
+        `txAdmin's dataPath changed during FiveM Enhanced startup, so QB Studio stopped the server. ${(error as Error).message}`,
+      );
+    }
+  }
+  return { ...launched, target, recoveryNotice: recoveryNotice ?? undefined };
+}
+
 function recentWorkspacesPath(): string {
   return path.join(app.getPath("userData"), "recent-workspaces.json");
 }
@@ -506,22 +570,27 @@ function createWindow() {
   mainWindow.on("close", (event) => {
     if (windowStateTimer) clearTimeout(windowStateTimer);
     persistWindowState();
-    if (allowCloseWithUnsavedChanges || dirtyFileCount === 0 || !mainWindow) return;
-    event.preventDefault();
-    const plural = dirtyFileCount === 1 ? "file has" : "files have";
-    const choice = dialog.showMessageBoxSync(mainWindow, {
-      type: "warning",
-      buttons: ["Discard changes and close", "Cancel"],
-      defaultId: 1,
-      cancelId: 1,
-      title: "Unsaved changes",
-      message: `${dirtyFileCount} ${plural} unsaved changes.`,
-      detail: "Closing QB Studio now will discard them.",
-    });
-    if (choice === 0) {
-      allowCloseWithUnsavedChanges = true;
-      mainWindow.close();
+    if (!allowCloseWithUnsavedChanges && dirtyFileCount > 0 && mainWindow) {
+      event.preventDefault();
+      const plural = dirtyFileCount === 1 ? "file has" : "files have";
+      const choice = dialog.showMessageBoxSync(mainWindow, {
+        type: "warning",
+        buttons: ["Discard changes and close", "Cancel"],
+        defaultId: 1,
+        cancelId: 1,
+        title: "Unsaved changes",
+        message: `${dirtyFileCount} ${plural} unsaved changes.`,
+        detail: "Closing QB Studio now will discard them.",
+      });
+      if (choice === 0) {
+        allowCloseWithUnsavedChanges = true;
+        mainWindow.close();
+      }
+      return;
     }
+    // Restore attached child and owned-overlay windows before Electron tears
+    // down the host, so the external client is not destroyed with Studio.
+    windowEmbed.detach();
   });
 
   mainWindow.on("closed", () => {
@@ -1250,8 +1319,10 @@ function registerIpcHandlers() {
     if (process.platform === "win32" && path.extname(configured).toLowerCase() !== ".exe") {
       throw new Error("Cfx.re client executable must be an .exe file.");
     }
-    spawn(configured, [], { detached: true, stdio: "ignore" }).unref();
-    return { ok: true, target };
+    const clientProcess = spawn(configured, [], { detached: true, stdio: "ignore" });
+    const launchPid = clientProcess.pid ?? null;
+    clientProcess.unref();
+    return { ok: true, target, launchPid };
   });
 
   // --- local Cfx.re server launch and artifact maintenance ---
@@ -1285,68 +1356,7 @@ function registerIpcHandlers() {
   ipcMain.handle("server:launch", () =>
     serverOperation.run("the local server start", async () => {
       const config = loadConfig();
-      const target = config.activeCfxTarget;
-      const executable = serverExeFor(config, target);
-      if (!executable) throw new Error(`Choose the ${cfxTargetLabel(target)} server executable in Settings first.`);
-      if (!config.txDataPath || !config.selectedProfile) throw new Error("Choose a txData workspace in Settings first.");
-      for (const otherTargetName of CFX_TARGETS) {
-        if (otherTargetName === target) continue;
-        const otherExecutable = serverExeFor(config, otherTargetName);
-        if (!otherExecutable || path.resolve(otherExecutable).toLowerCase() === path.resolve(executable).toLowerCase()) continue;
-        const otherTarget = resolveArtifactTarget(otherExecutable, config.txDataPath);
-        const otherPids = await findRunningServerPids(otherTarget.executablePath);
-        if (otherPids.length > 0) {
-          throw new Error(
-            `Stop the ${cfxTargetLabel(otherTargetName)} server before starting the ${cfxTargetLabel(target)} server on this workspace.`,
-          );
-        }
-      }
-      const workspaceRoot = activeProfileRoot();
-      const recoveryNotice = recoverInterruptedArtifactUpdate(executable, artifactStatePath(target));
-      const selectedArtifact = resolveArtifactTarget(executable, config.txDataPath);
-      const alreadyRunning = await findRunningServerPids(selectedArtifact.executablePath);
-      if (alreadyRunning.length === 0) {
-        const endpoint = parseLocalServerConfig(loadLocalServerConfig(workspaceRoot));
-        await assertFxServerPortAvailable(endpoint.host, endpoint.port);
-      }
-      let controlProfile = discoverTxAdminControlProfile(config.txDataPath, workspaceRoot);
-      if (target === "enhanced") {
-        if (alreadyRunning.length > 0) {
-          try {
-            assertTxAdminDataPath(config.txDataPath, workspaceRoot);
-            controlProfile = "default";
-          } catch (error) {
-            throw new Error(
-              "FiveM Enhanced is already running while txAdmin's default dataPath disagrees with the selected workspace. " +
-              `Stop the running server before switching workspaces. ${(error as Error).message}`,
-            );
-          }
-        } else {
-          const synchronized = synchronizeTxAdminDataPath(config.txDataPath, workspaceRoot);
-          controlProfile = synchronized.controlProfile;
-          if (synchronized.updated) {
-            // A runtime created while the stale profile was selected has no
-            // trustworthy txAdmin log source. Let its transport drop so the UI
-            // reconnects with the newly verified default control profile.
-            clearConsoleViews();
-            stopManagedRuntime();
-          }
-        }
-      }
-      const launched = await launchLocalServer(executable, config.txDataPath, controlProfile);
-      if (target === "enhanced") {
-        try {
-          assertTxAdminDataPath(config.txDataPath, workspaceRoot);
-        } catch (error) {
-          if (!launched.alreadyRunning) {
-            try { await stopLocalServer(executable, config.txDataPath); } catch { /* the path mismatch remains the primary failure */ }
-          }
-          throw new Error(
-            `txAdmin's dataPath changed during FiveM Enhanced startup, so QB Studio stopped the server. ${(error as Error).message}`,
-          );
-        }
-      }
-      return { ...launched, target, recoveryNotice: recoveryNotice ?? undefined };
+      return launchConfiguredServer(config, config.activeCfxTarget);
     }),
   );
 
@@ -1357,6 +1367,17 @@ function registerIpcHandlers() {
       const executable = serverExeFor(config, target);
       if (!executable) throw new Error(`Choose the ${cfxTargetLabel(target)} server executable in Settings first.`);
       return { ...(await stopLocalServer(executable, config.txDataPath)), target };
+    }),
+  );
+
+  ipcMain.handle("server:restart", (_e, targetValue: unknown) =>
+    serverOperation.run("the local server restart", async () => {
+      const target = requireCfxTarget(targetValue);
+      const config = loadConfig();
+      const executable = serverExeFor(config, target);
+      if (!executable) throw new Error(`Choose the ${cfxTargetLabel(target)} server executable in Settings first.`);
+      await stopLocalServer(executable, config.txDataPath);
+      return launchConfiguredServer(config, target);
     }),
   );
 
@@ -1585,6 +1606,7 @@ function registerIpcHandlers() {
 
   // --- embed the live FiveM game window into the Viewport tab (Windows only) ---
   ipcMain.handle("windowEmbed:listCandidates", () => windowEmbed.listCandidates());
+  ipcMain.handle("windowEmbed:status", () => windowEmbed.status());
   ipcMain.handle("windowEmbed:attach", (_e, candidateId: unknown) =>
     mainWindow ? windowEmbed.attach(requireString(candidateId, "Window candidate id", 128), mainWindow) : { ok: false, error: "No main window" },
   );
