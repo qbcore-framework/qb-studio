@@ -56,7 +56,7 @@ import {
   ensureManagedRuntime,
   loadLocalServerConfig,
   parseLocalServerConfig,
-  stopManagedRuntime,
+  stopEveryRuntime,
   synchronizeTxAdminDataPath,
 } from "./managedRuntime";
 import { OperationLock } from "./operationLock";
@@ -687,7 +687,7 @@ app.on("window-all-closed", () => {
   mcpDisconnect();
   stopWatching();
   windowEmbed.detach();
-  stopManagedRuntime();
+  stopEveryRuntime();
   luaLanguageServer.stop();
   discordPresence.stop();
   if (process.platform !== "darwin") app.quit();
@@ -819,7 +819,7 @@ function registerIpcHandlers() {
         clearConsoleViews();
         agent.resetConversation();
         await mcpDisconnect();
-        stopManagedRuntime();
+        stopEveryRuntime();
         await luaLanguageServer.stop();
       } else if (switchingLuaTarget) {
         // The renderer will initialize a fresh service after it receives the
@@ -884,7 +884,7 @@ function registerIpcHandlers() {
       clearConsoleViews();
       agent.resetConversation();
       await mcpDisconnect();
-      stopManagedRuntime();
+      stopEveryRuntime();
       luaLanguageServer.stop();
       const saved = saveConfig({
         ...previous,
@@ -1102,7 +1102,7 @@ function registerIpcHandlers() {
       const hasExistingPassword = workspaceHasRconPassword(selected.profileRoot);
       const result = applyDevelopmentRcon(selected.profileRoot, hasExistingPassword, allowOverwrite);
       try { await mcpDisconnect(); } catch { /* the on-disk setup succeeded; a stale runtime is stopped below */ }
-      stopManagedRuntime();
+      stopEveryRuntime();
       return result;
     }),
   );
@@ -1329,7 +1329,7 @@ function registerIpcHandlers() {
             // trustworthy txAdmin log source. Let its transport drop so the UI
             // reconnects with the newly verified default control profile.
             clearConsoleViews();
-            stopManagedRuntime();
+            stopEveryRuntime();
           }
         }
       }

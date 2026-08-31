@@ -9,6 +9,7 @@ import type { StudioConfig } from "./configStore";
 import { contentRevision, writeTextFile } from "./fsTree";
 import { isLoopbackHostname } from "./localUrl";
 import { assertSafeBasename, resolveInsideRoot } from "./pathSafety";
+import { ensureRemoteRuntime, stopRemoteRuntime } from "./remoteRuntime";
 
 export interface LocalServerConfig {
   host: string;
@@ -391,6 +392,13 @@ function systemEnvironment(): NodeJS.ProcessEnv {
 }
 
 export async function ensureManagedRuntime(config: StudioConfig): Promise<ManagedRuntimeConnection> {
+  // Opt-in remote host. With config.remote unset this is skipped entirely and
+  // the local path below runs unchanged.
+  if (config.remote) {
+    stopManagedRuntime();
+    return ensureRemoteRuntime(config.remote, runtimeScriptPath());
+  }
+  stopRemoteRuntime();
   if (!config.txDataPath || !config.selectedProfile) {
     throw new Error("Choose a local txData workspace in Settings before connecting the coding runtime.");
   }
@@ -499,6 +507,11 @@ export async function ensureManagedRuntime(config: StudioConfig): Promise<Manage
   });
   starting = trackedStartup;
   return trackedStartup;
+}
+
+export function stopEveryRuntime(): void {
+  stopRemoteRuntime();
+  stopManagedRuntime();
 }
 
 export function stopManagedRuntime(): void {

@@ -68,8 +68,28 @@ export interface StudioConfig {
   discordPresenceEnabled: boolean;
   agentSpendWarningUsd: number;
   editor: EditorPreferences;
+  /** Optional remote host. Null (the default) keeps every local code path unchanged. */
+  remote: RemoteHostSettings | null;
   // --- agent chat backends (no secrets here: this object is sent to the renderer) ---
   agent: AgentSettings;
+}
+
+/** Remote host coordinates. Holds no secrets: this object reaches the renderer,
+ * and SSH owns authentication via the user's own client configuration. */
+export interface RemoteHostSettings {
+  /** Host alias or user@host resolved by the system SSH client. */
+  sshTarget: string;
+  /** Absolute POSIX path of the server-data workspace on the host. */
+  workspacePath: string;
+  /** Absolute POSIX path of server.cfg inside that workspace. */
+  serverConfigPath: string;
+  txAdminDataDir: string | null;
+  txAdminControlProfile: string | null;
+  rconPort: number;
+  /** Absolute POSIX path to Node on the host. */
+  nodePath: string;
+  /** Absolute POSIX path the bundled runtime is deployed to. */
+  runtimePath: string;
 }
 
 export interface EditorPreferences {
@@ -113,6 +133,7 @@ function defaultAgentSettings(): AgentSettings {
 }
 
 const DEFAULTS: StudioConfig = {
+  remote: null,
   txDataPath: null,
   selectedProfile: null,
   theme: "system",
@@ -437,6 +458,49 @@ function agentSettings(raw: Record<string, unknown>): AgentSettings {
 }
 
 /** A narrow runtime schema — TypeScript types do not validate IPC or disk data. */
+/** Absolute POSIX path with no traversal segments or control characters. */
+function posixPath(value: unknown): string | null {
+  if (typeof value !== "string" || !value.startsWith("/") || value.length > 4096) return null;
+  if (/[\u0000-\u001f]/.test(value)) return null;
+  return value.split("/").includes("..") ? null : value;
+}
+
+/** Conservative host alias: nothing the SSH client could read as an option. */
+function sshTargetOrNull(value: unknown): string | null {
+  if (typeof value !== "string" || value.length === 0 || value.length > 255) return null;
+  if (value.startsWith("-")) return null;
+  return /^[A-Za-z0-9._@-]+$/.test(value) ? value : null;
+}
+
+export function remoteSettingsOrNull(value: unknown): RemoteHostSettings | null {
+  if (!isRecord(value)) return null;
+  const sshTarget = sshTargetOrNull(value.sshTarget);
+  const workspacePath = posixPath(value.workspacePath);
+  const serverConfigPath = posixPath(value.serverConfigPath);
+  const nodePath = posixPath(value.nodePath);
+  const runtimePath = posixPath(value.runtimePath);
+  if (!sshTarget || !workspacePath || !serverConfigPath || !nodePath || !runtimePath) return null;
+  // server.cfg must sit directly inside the workspace, matching the runtime's
+  // own assertServerDataConfig() check.
+  if (serverConfigPath !== `${workspacePath.replace(/\/+$/, "")}/server.cfg`) return null;
+  const rconPort = value.rconPort;
+  if (typeof rconPort !== "number" || !Number.isInteger(rconPort) || rconPort < 1 || rconPort > 65535) return null;
+  const txAdminDataDir = posixPath(value.txAdminDataDir);
+  const txAdminControlProfile = safeProfile(value.txAdminControlProfile);
+  // The runtime requires these together or not at all.
+  const pairComplete = Boolean(txAdminDataDir) === Boolean(txAdminControlProfile);
+  return {
+    sshTarget,
+    workspacePath,
+    serverConfigPath,
+    txAdminDataDir: pairComplete ? txAdminDataDir : null,
+    txAdminControlProfile: pairComplete ? txAdminControlProfile : null,
+    rconPort,
+    nodePath,
+    runtimePath,
+  };
+}
+
 export function normalizeConfig(value: unknown): StudioConfig {
   const raw = isRecord(value) ? value : {};
   // Migrate the original single client/server slots. A cfx-server.exe selection
@@ -452,6 +516,7 @@ export function normalizeConfig(value: unknown): StudioConfig {
       : (migratedEdition ?? inferredTarget);
   const oldClientPath = nullablePath(raw.fivemExePath);
   return {
+    remote: remoteSettingsOrNull(raw.remote),
     txDataPath: nullablePath(raw.txDataPath),
     selectedProfile: safeProfile(raw.selectedProfile),
     theme: themePreferenceOrDefault(raw.theme),
