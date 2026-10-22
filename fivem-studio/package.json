@@ -53,7 +53,7 @@
     "react-dom": "^19.2.8",
     "react-resizable-panels": "^4.12.3",
     "typescript": "^7.0.2",
-    "vite": "^8.2.2",
+    "vite": "^8.2.4",
     "yazl": "^3.3.1"
   },
   "engines": {
