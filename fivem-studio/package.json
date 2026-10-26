@@ -30,10 +30,10 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.122.0",
-    "@modelcontextprotocol/sdk": "^1.30.0",
-    "electron-updater": "6.8.9",
-    "koffi": "3.1.6",
-    "openai": "^7.8.0",
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "electron-updater": "6.8.11",
+    "koffi": "3.3.3",
+    "openai": "^7.43.0",
     "yauzl": "^3.4.0"
   },
   "devDependencies": {
